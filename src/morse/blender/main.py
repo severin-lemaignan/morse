@@ -5,14 +5,13 @@ import os
 import time
 import imp
 
-# Force the full import of blenderapi so python computes correctly all
-# values in its  namespace
-import morse.core.blenderapi
-
 # force a reload, since 'blenderapi' may have been already loaded
 # *outside* the GameEngine
-imp.reload(morse.core.blenderapi)
-persistantstorage = morse.core.blenderapi.persistantstorage()
+import morse.core
+imp.reload(morse.core)
+
+from morse.core import blenderapi
+persistantstorage = blenderapi.persistantstorage()
 
 # The service management
 from morse.core.services import MorseServices
@@ -142,7 +141,7 @@ def create_dictionaries ():
     persistantstorage.morse_services = MorseServices()
 
 
-    scene = morse.core.blenderapi.scene()
+    scene = blenderapi.scene()
 
     # Store the position and orientation of all objects
     for obj in scene.objects:
@@ -403,7 +402,7 @@ def link_services():
             instance = persistantstorage.componentDict[component_name]
         except KeyError as detail:
             try:
-                scene = morse.core.blenderapi.scene()
+                scene = blenderapi.scene()
                 robot_obj = scene.objects[component_name]
                 instance = persistantstorage.robotDict[robot_obj]
 
@@ -551,7 +550,7 @@ def init(contr):
     persistantstorage.pythonVersion = sys.version_info
     logger.info ("Python Version: %s.%s.%s" %
                     persistantstorage.pythonVersion[:3])
-    logger.info ("Blender Version: %s.%s.%s" % morse.core.blenderapi.version())
+    logger.info ("Blender Version: %s.%s.%s" % blenderapi.version())
     logger.info  ("Python path: %s" % sys.path)
     logger.info ("PID: %d" % os.getpid())
 
@@ -585,7 +584,7 @@ def init(contr):
     else:
         logger.critical('INITIALIZATION FAILED!')
         logger.info("Exiting now.")
-        contr = morse.core.blenderapi.controller()
+        contr = blenderapi.controller()
         close_all(contr)
         quit(contr)
     
@@ -711,16 +710,16 @@ def switch_camera(contr):
     sensor = contr.sensors['F9_KEY']
     # Activate only once for each key press
     if sensor.positive and sensor.triggered:
-        scene = morse.core.blenderapi.scene()
+        scene = blenderapi.scene()
         index = persistantstorage.current_camera_index
         next_camera = scene.cameras[index]
         scene.active_camera = next_camera
         logger.info("Showing view from camera: '%s'" % next_camera.name)
         # Disable mouse cursor for Human camera
         if next_camera.name == "Human_Camera":
-            morse.core.blenderapi.mousepointer(visible = False)
+            blenderapi.mousepointer(visible = False)
         else:
-            morse.core.blenderapi.mousepointer(visible = True)
+            blenderapi.mousepointer(visible = True)
         # Update the index for the next call
         index = (index + 1) % len(scene.cameras)
         persistantstorage.current_camera_index = index
