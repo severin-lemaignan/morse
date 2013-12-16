@@ -35,6 +35,8 @@ class MakeHuman(RobotCreator):
         bpymorse.import_makehuman(filepath=mhx_file)
         human = bpymorse.get_first_selected_object().parent
 
+        self.fix_rendering(human)
+
         # Fix orientation: X = forward direction
         old = human.rotation_euler
         human.rotation_euler = (old[0], old[1], old[2] + math.pi/2)
@@ -42,6 +44,12 @@ class MakeHuman(RobotCreator):
         human.parent = self._bpy_object
         bpymorse.mode_set(mode='OBJECT') # by default, when loading a MakeHuman model, Blender is in Pose mode.
         return human.name
+
+    def fix_rendering(self, human):
+        for c in human.children:
+            #if hasattr(c, "material_slots")
+            for slot in c.material_slots:
+                slot.material.use_transparency = False
 
     def add_interface(self, interface):
         if interface == "socket":
