@@ -1,7 +1,62 @@
 import logging; logger = logging.getLogger("morserobots." + __name__)
+import math
 from morse.builder import bpymorse
+from morse.builder.creator import RobotCreator
 from morse.builder import Armature, Robot
 from morse.builder.sensors import ArmaturePose
+
+class MakeHuman(RobotCreator):
+    def __init__(self, filename, name = None):
+        """
+        :param filename: A MakeHuman model to load.
+        """
+
+        RobotCreator.__init__(self, name)
+        armature_name = self.import_mhx(filename)
+
+        try:
+            self.armature = Armature(armature_name, "human_posture")
+            self.append(self.armature)
+        except KeyError:
+            logger.error("Could not find the human armature! (I was looking " +\
+                         "for an object called '" +  armature_name + "' in the human" +\
+                         " children). I won't be able to export the human pose" +\
+                         " to any middleware.")
+            return
+
+        # Add an armature sensor. "joint_stateS" to match standard ROS spelling.
+        self.joint_states = ArmaturePose("joint_states")
+        self.armature.append(self.joint_states)
+
+
+    def import_mhx(self, mhx_file):
+
+        bpymorse.deselect_all()
+        bpymorse.import_makehuman(filepath=mhx_file)
+        human = bpymorse.get_first_selected_object().parent
+
+        # Fix orientation: X = forward direction
+        old = human.rotation_euler
+        human.rotation_euler = (old[0], old[1], old[2] + math.pi/2)
+ 
+        human.parent = self._bpy_object
+        bpymorse.mode_set(mode='OBJECT') # by default, when loading a MakeHuman model, Blender is in Pose mode.
+        return human.name
+
+    def add_interface(self, interface):
+        if interface == "socket":
+            self.joint_states.add_stream("socket")
+            self.armature.add_service("socket")
+            self.armature.add_stream("socket")
+
+        elif interface == "ros":
+
+            self.joint_states.add_stream("ros")
+
+            self.armature.add_service("ros")
+            self.armature.add_overlay("ros",
+              "morse.middleware.ros.overlays.armatures.ArmatureController")
+
 
 class Human(Robot):
     """ Append a human model to the scene.
@@ -38,6 +93,7 @@ class Human(Robot):
         self.suffix = self.name[-4:] if self.name[-4] == "." else ""
 
         self.armature = None
+
         if filename == 'mocap_human':
             self.properties(classpath="morse.robots.mocap_human.MocapHuman")
         else:
@@ -51,6 +107,7 @@ class Human(Robot):
                          "for an object called 'HumanArmature' in the human" +\
                          " children). I won't be able to export the human pose" +\
                          " to any middleware.")
+            return
 
         # Add an armature sensor. "joint_stateS" to match standard ROS spelling.
         self.joint_states = ArmaturePose()
@@ -66,7 +123,6 @@ class Human(Robot):
                     actuator.layer = i
                 for i, actuator in enumerate(armature_object.game.actuators):
                     actuator.layer = i
-
     def after_renaming(self):
         if self._blender_filename == 'mocap_human':
             # no need for mocap

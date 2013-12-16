@@ -41,6 +41,8 @@ apply_transform = empty_method
 open_sound = empty_method
 new_scene = empty_method
 armatures = empty_method
+import_makehuman = empty_method
+mode_set = empty_method
 
 if bpy:
     select_all = bpy.ops.object.select_all
@@ -71,6 +73,8 @@ if bpy:
     open_sound = bpy.ops.sound.open
     new_scene = bpy.ops.scene.new
     armatures = bpy.data.armatures
+    import_makehuman = bpy.ops.import_scene.makehuman_mhx
+    mode_set = bpy.ops.object.mode_set
 
 def version():
     if bpy:
