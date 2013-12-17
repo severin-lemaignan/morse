@@ -67,7 +67,10 @@ class MorseRPCTypeError(MorseWrongArgsError):
 class MorseBuilderError(MorseError):
     """ Morse Error caused by the Builder API.
     """
-    pass
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
 
 class MorseBuilderNoComponentError(MorseBuilderError):
     """ Morse Error caused by a wrong component in Builder.

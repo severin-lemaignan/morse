@@ -5,6 +5,8 @@ from morse.builder.creator import RobotCreator
 from morse.builder import Armature, Robot
 from morse.builder.sensors import ArmaturePose
 
+from morse.core.exceptions import *
+
 class MakeHuman(RobotCreator):
 
     IK_TARGETS = ["hand.R", "hand.L", "foot.R", "foot.L"]
@@ -16,6 +18,10 @@ class MakeHuman(RobotCreator):
 
         RobotCreator.__init__(self, name)
         armature_name = self.import_mhx(filename)
+
+        if not armature_name:
+            self.armature = None
+            return
 
         try:
             self.armature = Armature(armature_name, "human_posture")
@@ -35,7 +41,17 @@ class MakeHuman(RobotCreator):
     def import_mhx(self, mhx_file):
 
         bpymorse.deselect_all()
-        bpymorse.import_makehuman(filepath=mhx_file)
+
+        try:
+            bpymorse.import_makehuman(filepath=mhx_file)
+        except AttributeError:
+            msg = "The MakeHuman importer is not enabled in " + \
+                  "Blender! Can not load %s." % mhx_file
+            msg += " Launch Blender manually, enable the MakeHuman " + \
+                   "importer in User Preferences->Addons, and save" + \
+                   " the preferences."
+            raise MorseBuilderError(msg)
+
         human = bpymorse.get_first_selected_object().parent
         bpymorse.mode_set(mode='OBJECT') # by default, when loading a MakeHuman model, Blender is in Pose mode.
 
@@ -72,8 +88,9 @@ class MakeHuman(RobotCreator):
 
 
         if bone not in [c.name for c in human.pose.bones]:
-            msg = "Joint <%s> does not exist in armature %s" % (joint, armature.name)
-            raise MorseRPCInvokationError(msg)
+            msg = "Joint <%s> does not exist in model %s." % (bone, human.name)
+            msg += " Did you add a skeleton to your model in MakeHuman?"
+            raise MorseBuilderError(msg)
 
         return human.pose.bones[bone]
 
@@ -99,6 +116,9 @@ class MakeHuman(RobotCreator):
         return targets
 
     def add_interface(self, interface):
+        if not self.armature:
+            return
+
         if interface == "socket":
             self.joint_states.add_stream("socket")
             self.armature.add_service("socket")
