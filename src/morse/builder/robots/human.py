@@ -8,7 +8,7 @@ from morse.core.exceptions import *
 
 class MakeHuman(Robot):
 
-    IK_TARGETS = ["hand.R", "hand.L", "foot.R", "foot.L"]
+    IK_TARGETS = ["hand.R", "hand.L", "foot.R", "foot.L", "head"]
 
     def __init__(self, filename, name = None):
         """
@@ -22,15 +22,14 @@ class MakeHuman(Robot):
             self.armature = None
             return
 
-        try:
-            self.armature = Armature(armature_name, "human_posture")
-            self.append(self.armature)
-        except KeyError:
-            logger.error("Could not find the human armature! (I was looking " +\
-                         "for an object called '" +  armature_name + "' in the human" +\
-                         " children). I won't be able to export the human pose" +\
-                         " to any middleware.")
-            return
+        self.armature = Armature(armature_name)
+        self.append(self.armature)
+
+        self.armature.create_ik_targets(self.IK_TARGETS)
+
+        for t, name in self.armature.ik_targets:
+            t.parent = self._bpy_object
+
 
         # Add an armature sensor. "joint_stateS" to match standard ROS spelling.
         self.joint_states = ArmaturePose("joint_states")
@@ -44,7 +43,7 @@ class MakeHuman(Robot):
         try:
             bpymorse.import_makehuman()
         except AttributeError:
-            logger.error("The MakeHuman importer is not active. Enabling it now.")
+            logger.warn("The MakeHuman importer is not active. Enabling it now.")
             bpymorse.enable_addon(module="io_import_scene_mhx")
 
         bpymorse.import_makehuman(filepath=mhx_file, 
@@ -54,15 +53,10 @@ class MakeHuman(Robot):
         human = bpymorse.get_first_selected_object().parent
         bpymorse.mode_set(mode='OBJECT') # by default, when loading a MakeHuman model, Blender is in Pose mode.
 
-        ik_targets = self.create_ik_targets(human)
 
         self.fix_rendering(human)
 
-
         human.parent = self._bpy_object
-
-        for t in ik_targets:
-            t.parent = self._bpy_object
 
         # Fix orientation: X = forward direction
         local_orientation = self._bpy_object.matrix_basis
@@ -79,40 +73,6 @@ class MakeHuman(Robot):
             for slot in c.material_slots:
                 slot.material.use_transparency = False
 
-    def get_posebone(self, human, bone):
-        """ Checks a given joint name exist in the armature,
-
-        If the joint does not exist, throw an exception.
-        """
-
-
-        if bone not in [c.name for c in human.pose.bones]:
-            msg = "Joint <%s> does not exist in model %s." % (bone, human.name)
-            msg += " Did you add a skeleton to your model in MakeHuman?"
-            raise MorseBuilderError(msg)
-
-        return human.pose.bones[bone]
-
-
-    def create_ik_targets(self, human):
-
-        targets = []
-        for target in MakeHuman.IK_TARGETS:
-            posebone = self.get_posebone(human, target)
-            bpymorse.add_morse_empty("ARROWS")
-            empty = bpymorse.get_first_selected_object()
-            empty.name = "ik_target_" + human.name + "_" + target
-            empty.scale = [0.01, 0.01, 0.01]
-
-            empty.matrix_local = posebone.bone.matrix_local
-            empty.location = posebone.bone.tail_local
-
-            ik = posebone.constraints.new("IK")
-            ik.use_rotation = True
-            ik.target = empty
-            targets.append(empty)
-
-        return targets
 
     def add_interface(self, interface):
         if not self.armature:
