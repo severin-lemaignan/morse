@@ -83,13 +83,16 @@ class MakeHuman(RobotCreator):
         targets = []
         for target in MakeHuman.IK_TARGETS:
             posebone = self.get_posebone(human, target)
-            bpymorse.add_morse_empty("SPHERE")
+            bpymorse.add_morse_empty("ARROWS")
             empty = bpymorse.get_first_selected_object()
-            empty.name = "IKTarget_" + target
-            empty.scale = [0.05, 0.05, 0.05]
+            empty.name = "ik_target_" + human.name + "_" + target
+            empty.scale = [0.01, 0.01, 0.01]
+
+            empty.matrix_local = posebone.bone.matrix_local
             empty.location = posebone.bone.tail_local
 
             ik = posebone.constraints.new("IK")
+            ik.use_rotation = True
             ik.target = empty
             targets.append(empty)
 
