@@ -43,7 +43,9 @@ class MakeHuman(RobotCreator):
         bpymorse.deselect_all()
 
         try:
-            bpymorse.import_makehuman(filepath=mhx_file)
+            bpymorse.import_makehuman(filepath=mhx_file, 
+                                      advanced = True,
+                                      mesh = False) # import only the proxy!
         except AttributeError:
             msg = "The MakeHuman importer is not enabled in " + \
                   "Blender! Can not load %s." % mhx_file
