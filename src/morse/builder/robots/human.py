@@ -1,13 +1,12 @@
 import logging; logger = logging.getLogger("morserobots." + __name__)
 import math
 from morse.builder import bpymorse
-from morse.builder.creator import RobotCreator
 from morse.builder import Armature, Robot
 from morse.builder.sensors import ArmaturePose
 
 from morse.core.exceptions import *
 
-class MakeHuman(RobotCreator):
+class MakeHuman(Robot):
 
     IK_TARGETS = ["hand.R", "hand.L", "foot.R", "foot.L"]
 
@@ -16,7 +15,7 @@ class MakeHuman(RobotCreator):
         :param filename: A MakeHuman model to load.
         """
 
-        RobotCreator.__init__(self, name)
+        Robot.__init__(self, name)
         armature_name = self.import_mhx(filename)
 
         if not armature_name:
