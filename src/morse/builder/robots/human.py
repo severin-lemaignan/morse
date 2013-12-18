@@ -43,16 +43,14 @@ class MakeHuman(RobotCreator):
         bpymorse.deselect_all()
 
         try:
-            bpymorse.import_makehuman(filepath=mhx_file, 
-                                      advanced = True,
-                                      mesh = False) # import only the proxy!
+            bpymorse.import_makehuman()
         except AttributeError:
-            msg = "The MakeHuman importer is not enabled in " + \
-                  "Blender! Can not load %s." % mhx_file
-            msg += " Launch Blender manually, enable the MakeHuman " + \
-                   "importer in User Preferences->Addons, and save" + \
-                   " the preferences."
-            raise MorseBuilderError(msg)
+            logger.error("The MakeHuman importer is not active. Enabling it now.")
+            bpymorse.enable_addon(module="io_import_scene_mhx")
+
+        bpymorse.import_makehuman(filepath=mhx_file, 
+                                    advanced = True,
+                                    mesh = False) # import only the proxy!
 
         human = bpymorse.get_first_selected_object().parent
         bpymorse.mode_set(mode='OBJECT') # by default, when loading a MakeHuman model, Blender is in Pose mode.

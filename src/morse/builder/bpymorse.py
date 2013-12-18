@@ -43,6 +43,7 @@ new_scene = empty_method
 armatures = empty_method
 import_makehuman = empty_method
 mode_set = empty_method
+enable_addon = empty_method
 
 if bpy:
     select_all = bpy.ops.object.select_all
@@ -75,6 +76,7 @@ if bpy:
     armatures = bpy.data.armatures
     import_makehuman = bpy.ops.import_scene.makehuman_mhx
     mode_set = bpy.ops.object.mode_set
+    enable_addon = bpy.ops.wm.addon_enable
 
 def version():
     if bpy:
