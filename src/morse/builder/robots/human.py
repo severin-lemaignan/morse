@@ -6,6 +6,9 @@ from morse.builder import Armature, Robot
 from morse.builder.sensors import ArmaturePose
 
 class MakeHuman(RobotCreator):
+
+    IK_TARGETS = ["hand.R", "hand.L", "foot.R", "foot.L"]
+
     def __init__(self, filename, name = None):
         """
         :param filename: A MakeHuman model to load.
@@ -34,15 +37,25 @@ class MakeHuman(RobotCreator):
         bpymorse.deselect_all()
         bpymorse.import_makehuman(filepath=mhx_file)
         human = bpymorse.get_first_selected_object().parent
+        bpymorse.mode_set(mode='OBJECT') # by default, when loading a MakeHuman model, Blender is in Pose mode.
+
+        ik_targets = self.create_ik_targets(human)
 
         self.fix_rendering(human)
 
-        # Fix orientation: X = forward direction
-        old = human.rotation_euler
-        human.rotation_euler = (old[0], old[1], old[2] + math.pi/2)
- 
+
         human.parent = self._bpy_object
-        bpymorse.mode_set(mode='OBJECT') # by default, when loading a MakeHuman model, Blender is in Pose mode.
+
+        for t in ik_targets:
+            t.parent = self._bpy_object
+
+        # Fix orientation: X = forward direction
+        local_orientation = self._bpy_object.matrix_basis
+        old = self._bpy_object.rotation_euler
+        self._bpy_object.rotation_euler = (old[0], old[1], old[2] + math.pi/2)
+        self._bpy_object.matrix_basis = local_orientation
+    
+
         return human.name
 
     def fix_rendering(self, human):
@@ -50,6 +63,37 @@ class MakeHuman(RobotCreator):
             #if hasattr(c, "material_slots")
             for slot in c.material_slots:
                 slot.material.use_transparency = False
+
+    def get_posebone(self, human, bone):
+        """ Checks a given joint name exist in the armature,
+
+        If the joint does not exist, throw an exception.
+        """
+
+
+        if bone not in [c.name for c in human.pose.bones]:
+            msg = "Joint <%s> does not exist in armature %s" % (joint, armature.name)
+            raise MorseRPCInvokationError(msg)
+
+        return human.pose.bones[bone]
+
+
+    def create_ik_targets(self, human):
+
+        targets = []
+        for target in MakeHuman.IK_TARGETS:
+            posebone = self.get_posebone(human, target)
+            bpymorse.add_morse_empty("SPHERE")
+            empty = bpymorse.get_first_selected_object()
+            empty.name = "IKTarget_" + target
+            empty.scale = [0.05, 0.05, 0.05]
+            empty.location = posebone.bone.tail_local
+
+            ik = posebone.constraints.new("IK")
+            ik.target = empty
+            targets.append(empty)
+
+        return targets
 
     def add_interface(self, interface):
         if interface == "socket":
