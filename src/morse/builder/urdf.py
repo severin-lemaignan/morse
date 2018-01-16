@@ -5,7 +5,12 @@ import copy
 
 from urdf_parser_py.urdf import URDF
 
-URDFMODEL="/home/lemaigna/my_ros_prefix/share/nao_description/urdf/nao_robot_v4.urdf"
+URDFMODEL="/home/slemaignan/src/naoqi_driver/share/urdf/pepper.urdf"
+
+# Meshes are referenced in the URDF file relative to their package, eg:
+# 'package://pepper_meshes/meshes/1.0/Torso.dae'
+# MORSE will replace 'package://' by 'ROS_SHARE_ROOT':
+ROS_SHARE_ROOT="/home/slemaignan/ros-dev/share"
 
 robot = URDF.from_xml_string(open(URDFMODEL,'r').read())
 
@@ -31,7 +36,7 @@ class URDFLink:
         xyz = (0,0,0)
         rpy = None
 
-        if self.inertial:
+        if self.inertial and self.inertial.origin:
             xyz = self.inertial.origin.xyz
             rpy = self.inertial.origin.rpy
         elif self.collision:
@@ -166,7 +171,7 @@ class URDFJoint:
             return
 
         print("Building %s..." % self.name)
-        self.editbone = armature.data.edit_bones.new(self.name)
+        self.editbone = armature.data.edit_bones.new(str(hash(self.name)))
 
         if parent:
             self.editbone.use_inherit_rotation = True
@@ -219,7 +224,7 @@ class URDFJoint:
 
             return
 
-        self.posebone = armature.pose.bones[self.name]
+        self.posebone = armature.pose.bones[str(hash(self.name))]
 
         # Prevent moving or rotating bones that are not end-effectors (outside of IKs)
         if self.children:
@@ -282,29 +287,47 @@ class URDFJoint:
         if not joint:
             joint = self
 
-        bpy.ops.object.empty_add(type = "ARROWS")
 
-        #empty = bpymorse.get_first_selected_object()
-        empty = bpy.context.selected_objects[0]
-        empty.name = self.link.name
+        visuals = []
 
-        empty.matrix_local = armature.data.bones[joint.name].matrix_local
-        empty.scale = [0.01, 0.01, 0.01]
+        if self.link.visual:
+            path = self.link.visual.geometry.filename.replace("package:/", ROS_SHARE_ROOT)
+            # Save a list of objects names before importing Collada
+            objects_names = [obj.name for obj in bpy.data.objects]
+            # Import Collada from filepath
+            bpy.ops.wm.collada_import(filepath=path)
+            # Get a list of the imported objects
+            visuals = [obj for obj in bpy.data.objects \
+                          if obj.name not in objects_names]
 
-        if xyz and rot:
-            empty.location += rot * xyz
-        elif xyz:
-            empty.location += xyz
+            for v in visuals:
+                v.scale = [v.scale[0] * self.link.visual.geometry.scale[0],
+                           v.scale[1] * self.link.visual.geometry.scale[1],
+                           v.scale[2] * self.link.visual.geometry.scale[2]]
+        else:
+            bpy.ops.object.empty_add(type = "ARROWS")
+
+            #empty = bpymorse.get_first_selected_object()
+            empty = bpy.context.selected_objects[0]
+            empty.name = self.link.name
+            empty.scale = [0.01, 0.01, 0.01]
+            visuals = [empty]
+
+        for v in visuals:
+            v.matrix_local = armature.data.bones[str(hash(joint.name))].matrix_local
+
+            if xyz and rot:
+                v.location += rot * xyz
+            elif xyz:
+                v.location += xyz
 
 
-        # parent the empty to the armature
-        armature.data.bones[joint.name].use_relative_parent = True
-        empty.parent = armature
-        empty.parent_bone = joint.name
-        empty.parent_type = "BONE"
+            # parent the visuals to the armature
+            armature.data.bones[str(hash(joint.name))].use_relative_parent = True
+            v.parent = armature
+            v.parent_bone = str(hash(joint.name))
+            v.parent_type = "BONE"
 
-        # returns the empty that may be used as an IK target
-        return empty
 
 
     def __repr__(self):
@@ -361,5 +384,5 @@ class URDFArmature:
         for root in self.roots:
             root.build_objectmode(ob)
 
-armature = URDFArmature("nao", robot)
+armature = URDFArmature("pepper", robot)
 armature.build()
