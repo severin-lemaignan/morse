@@ -3,16 +3,13 @@ from mathutils import Vector, Matrix, Euler
 import copy
 #from morse.builder import bpymorse
 
-from urdf_parser_py.urdf import URDF
-
-URDFMODEL="/home/slemaignan/src/naoqi_driver/share/urdf/pepper.urdf"
+from urdf_parser_py.urdf import URDF, Box, Cylinder, Sphere, Mesh
 
 # Meshes are referenced in the URDF file relative to their package, eg:
 # 'package://pepper_meshes/meshes/1.0/Torso.dae'
 # MORSE will replace 'package://' by 'ROS_SHARE_ROOT':
-ROS_SHARE_ROOT="/home/slemaignan/ros-dev/share"
+ROS_SHARE_ROOT="/home/jbaudisch/ros/share/models/"
 
-robot = URDF.from_xml_string(open(URDFMODEL,'r').read())
 
 class URDFLink:
 
@@ -39,10 +36,10 @@ class URDFLink:
         if self.inertial and self.inertial.origin:
             xyz = self.inertial.origin.xyz
             rpy = self.inertial.origin.rpy
-        elif self.collision:
+        elif self.collision and self.collision.origin:
             xyz = self.collision.origin.xyz
             rpy = self.collision.origin.rpy
-        elif self.visual:
+        elif self.visual and self.visual.origin:
             xyz = self.visual.origin.xyz
             rpy = self.visual.origin.rpy
 
@@ -65,13 +62,18 @@ class URDFJoint:
         
         self.name = urdf_joint.name
         self.type = urdf_joint.type
-        self.xyz = Vector(urdf_joint.origin.xyz)
-        if urdf_joint.origin.rpy:
-            # self.rot is the *orientation* of the frame of the joint, in
-            # *world coordinates*
-            self.rot = Euler(urdf_joint.origin.rpy, 'XYZ').to_quaternion()
-        else:
-            self.rot = Euler((0, 0, 0)).to_quaternion()
+
+        # defaults to zero vector
+        self.xyz = Vector((0, 0, 0))
+        self.rot = Euler((0, 0, 0)).to_quaternion()
+
+        if urdf_joint.origin:
+            if urdf_joint.origin.xyz:
+                 self.xyz = Vector(urdf_joint.origin.xyz)
+            if urdf_joint.origin.rpy:
+                # self.rot is the *orientation* of the frame of the joint, in
+                # *world coordinates*
+                self.rot = Euler(urdf_joint.origin.rpy, 'XYZ').to_quaternion()
 
         self.link = URDFLink(urdf_link)
 
@@ -168,37 +170,36 @@ class URDFJoint:
 
         if not self.children and self.type == self.FIXED:
             print("Processing %s as a static frame at the end of the armature. Do not create bone for it" % self.name)
-            return
+            #return
 
         print("Building %s..." % self.name)
-        self.editbone = armature.data.edit_bones.new(str(hash(self.name)))
+        self.editbone = armature.data.edit_bones.new(self.name)
 
         if parent:
             self.editbone.use_inherit_rotation = True
             self.editbone.parent = parent.editbone
 
+            self.editbone.head = parent.editbone.tail
+
+            """
             if len(parent.children) == 1:
 
                 # this joint is the only child of the parent joint: connect
                 # them with parent's tail
                 parent.editbone.tail = self.rot * self.xyz + parent.editbone.head
+                print("---Reset---")
+                #print("Reset {} to: head={}, tail={}".format(parent.name, parent.editbone.head, parent.editbone.tail))
                 self.editbone.use_connect = True
             else:
                 self.editbone.head = self.rot * self.xyz + parent.editbone.head
+            """
 
         else:
             self.editbone.head = (0, 0, 0)
 
-        if self.subjoints:
-            # if we have subjoints, we place the tail of the bone at the origin of the last joint's link.
-            offset = self.subjoints[-1].link.xyz
-        else:
-            offset = self.link.xyz
-        
-        if offset == Vector((0,0,0)):
-            #TODO: compute an offset based on the joint axis direction
-            offset = parent.editbone.tail - parent.editbone.head
-        self.editbone.tail = self.editbone.head + offset
+        self.editbone.tail = self.rot * self.xyz + self.editbone.head
+
+        print("Set {} to: head={}, tail={}\n".format(self.name, self.editbone.head, self.editbone.tail))
 
         for child in self.children:
             child.build_editmode(armature, self)
@@ -224,7 +225,7 @@ class URDFJoint:
 
             return
 
-        self.posebone = armature.pose.bones[str(hash(self.name))]
+        self.posebone = armature.pose.bones[self.name]
 
         # Prevent moving or rotating bones that are not end-effectors (outside of IKs)
         if self.children:
@@ -287,48 +288,97 @@ class URDFJoint:
         if not joint:
             joint = self
 
-
         visuals = []
+        geometry = self.link.visual.geometry
 
-        if self.link.visual:
-            path = self.link.visual.geometry.filename.replace("package:/", ROS_SHARE_ROOT)
-            # Save a list of objects names before importing Collada
-            objects_names = [obj.name for obj in bpy.data.objects]
-            # Import Collada from filepath
-            bpy.ops.wm.collada_import(filepath=path)
-            # Get a list of the imported objects
-            visuals = [obj for obj in bpy.data.objects \
-                          if obj.name not in objects_names]
+        if self.link.visual and geometry:
 
-            for v in visuals:
-                v.scale = [v.scale[0] * self.link.visual.geometry.scale[0],
-                           v.scale[1] * self.link.visual.geometry.scale[1],
-                           v.scale[2] * self.link.visual.geometry.scale[2]]
+            if isinstance(geometry, Mesh):
+                path = geometry.filename.replace("package:/", ROS_SHARE_ROOT)
+
+                # Save a list of objects names before importing Collada or STL
+                objects_names = [obj.name for obj in bpy.data.objects]
+
+                if ".dae" in geometry.filename:
+                    # Import Collada from filepath
+                    bpy.ops.wm.collada_import(filepath=path)
+                    # Get a list of the imported objects
+                    visuals = [obj for obj in bpy.data.objects \
+                                  if obj.name not in objects_names]
+
+                elif ".stl" in geometry.filename:
+                    bpy.ops.import_mesh.stl(filepath=path)
+                    # Get a list of the imported objects
+                    visuals = [obj for obj in bpy.data.objects \
+                                  if obj.name not in objects_names]
+
+                else:
+                    print("unknown mesh: {}".format(path))
+                    return
+
+                if geometry.scale:
+                    for v in visuals:
+                        v.scale = [v.scale[0] * geometry.scale[0],
+                                   v.scale[1] * geometry.scale[1],
+                                   v.scale[2] * geometry.scale[2]]
+
+            elif isinstance(geometry, Box):
+                bpy.ops.mesh.primitive_cube_add()
+                ob = bpy.context.active_object
+                ob.dimensions = geometry.size
+
+            elif isinstance(geometry, Cylinder):
+                radius = geometry.radius
+                length = geometry.length
+                bpy.ops.mesh.primitive_cylinder_add(radius=radius, depth=length)
+
+            elif isinstance(geometry, Sphere):
+                bpy.ops.mesh.primitive_uv_sphere_add(size=geometry.radius)
+
+            else:
+                print("unknown geometry: {}".format(geometry))
+                return
+
+            if not isinstance(geometry, Mesh):
+                obj = bpy.context.selected_objects[0]
+                obj.name = self.link.name
+                visuals = [obj]
+
         else:
             bpy.ops.object.empty_add(type = "ARROWS")
 
-            #empty = bpymorse.get_first_selected_object()
             empty = bpy.context.selected_objects[0]
             empty.name = self.link.name
             empty.scale = [0.01, 0.01, 0.01]
             visuals = [empty]
 
         for v in visuals:
-            v.matrix_local = armature.data.bones[str(hash(joint.name))].matrix_local
 
-            if xyz and rot:
-                v.location += rot * xyz
-            elif xyz:
-                v.location += xyz
+            v.location = self.link.xyz
+            bpy.context.object.rotation_mode = 'QUATERNION'
+            v.rotation_quaternion = self.link.rot
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+
+            #bpy.ops.object.constraint_add(type='CHILD_OF')
+            #bpy.context.object.constraints["Child Of"].target = bpy.data.objects[armature.name]
+            #bpy.context.object.constraints["Child Of"].subtarget = joint.children[0].name
+
+            #bpy.context.object.constraints["Child Of"].use_rotation_x = False
+            #bpy.context.object.constraints["Child Of"].use_rotation_y = False
+            #bpy.context.object.constraints["Child Of"].use_rotation_z = False
+
+
+            #if xyz and rot:
+            #    v.location += rot * xyz
+            #elif xyz:
+            #    v.location += xyz
 
 
             # parent the visuals to the armature
-            armature.data.bones[str(hash(joint.name))].use_relative_parent = True
+            armature.data.bones[joint.children[0].name].use_relative_parent = True
             v.parent = armature
-            v.parent_bone = str(hash(joint.name))
+            v.parent_bone = joint.children[0].name
             v.parent_type = "BONE"
-
-
 
     def __repr__(self):
         return "URDF joint<%s>" % self.name
@@ -384,5 +434,10 @@ class URDFArmature:
         for root in self.roots:
             root.build_objectmode(ob)
 
-armature = URDFArmature("pepper", robot)
-armature.build()
+def create_urdf_model(urdf_path, name='default', ros_share_root=''):
+    model = URDF.from_xml_string(open(urdf_path,'r').read())
+
+    armature = URDFArmature(name, model)
+    armature.build()
+
+    return armature
