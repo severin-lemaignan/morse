@@ -8,7 +8,7 @@ from urdf_parser_py.urdf import URDF, Box, Cylinder, Sphere, Mesh
 # Meshes are referenced in the URDF file relative to their package, eg:
 # 'package://pepper_meshes/meshes/1.0/Torso.dae'
 # MORSE will replace 'package://' by 'ROS_SHARE_ROOT':
-ROS_SHARE_ROOT="/home/jbaudisch/ros/share/models/"
+ROS_SHARE_ROOT=''
 
 
 class URDFLink:
@@ -96,7 +96,7 @@ class URDFJoint:
 
         child = URDFJoint(urdf_joint, urdf_link)
         
-        if child.xyz == Vector((0.,0.,0.)):
+        if (child.xyz == Vector((0.,0.,0.))):
             print("Zero lenght link (ie, multi DoF joints)! Merging it into a single Blender bone.")
             if not self.subjoints:
                 self.subjoints.append(copy.deepcopy(self))
@@ -168,7 +168,7 @@ class URDFJoint:
         # different places: corresponding Blender bones may not be "visually"
         # connected.
 
-        if not self.children and self.type == self.FIXED:
+        if not self.children and (self.type == self.FIXED):
             print("Processing %s as a static frame at the end of the armature. Do not create bone for it" % self.name)
             #return
 
@@ -206,7 +206,7 @@ class URDFJoint:
 
     def build_objectmode(self, armature, parent = None):
 
-        if not self.children and self.type == self.FIXED:
+        if not self.children and (self.type == self.FIXED):
             assert(parent)
             target = self.add_link_frame(armature, parent, self.xyz, self.rot)
             
@@ -294,19 +294,23 @@ class URDFJoint:
         if self.link.visual and geometry:
 
             if isinstance(geometry, Mesh):
+                if (ROS_SHARE_ROOT == ''):
+                    print("ROS_SHARE_ROOT required to import meshes!")
+                    return
+
                 path = geometry.filename.replace("package:/", ROS_SHARE_ROOT)
 
                 # Save a list of objects names before importing Collada or STL
                 objects_names = [obj.name for obj in bpy.data.objects]
 
-                if ".dae" in geometry.filename:
+                if (".dae" in geometry.filename):
                     # Import Collada from filepath
                     bpy.ops.wm.collada_import(filepath=path)
                     # Get a list of the imported objects
                     visuals = [obj for obj in bpy.data.objects \
                                   if obj.name not in objects_names]
 
-                elif ".stl" in geometry.filename:
+                elif (".stl" in geometry.filename):
                     bpy.ops.import_mesh.stl(filepath=path)
                     # Get a list of the imported objects
                     visuals = [obj for obj in bpy.data.objects \
@@ -434,7 +438,10 @@ class URDFArmature:
         for root in self.roots:
             root.build_objectmode(ob)
 
-def create_urdf_model(urdf_path, name='default', ros_share_root=''):
+def create_urdf_model(urdf_path, name, ros_share_root):
+    global ROS_SHARE_ROOT
+    ROS_SHARE_ROOT = ros_share_root
+
     model = URDF.from_xml_string(open(urdf_path,'r').read())
 
     armature = URDFArmature(name, model)
