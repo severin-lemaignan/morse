@@ -328,13 +328,11 @@ class URDFJoint:
                     visuals = [obj for obj in bpy.data.objects \
                                   if obj.name not in objects_names]
 
-                if not geometry.scale:
-                    return
-
-                for v in visuals:
-                    v.scale = [v.scale[0] * geometry.scale[0],
-                               v.scale[1] * geometry.scale[1],
-                               v.scale[2] * geometry.scale[2]]
+                if geometry.scale:
+                    for v in visuals:
+                        v.scale = [v.scale[0] * geometry.scale[0],
+                                   v.scale[1] * geometry.scale[1],
+                                   v.scale[2] * geometry.scale[2]]
 
             elif isinstance(geometry, Box):
                 bpy.ops.mesh.primitive_cube_add()
