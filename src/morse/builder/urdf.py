@@ -37,7 +37,7 @@ class URDFLink:
         is not connected to any other child bone).
         """
         xyz = (0,0,0)
-        rpy = None
+        rpy = (0,0,0)
 
         if self.inertial and self.inertial.origin:
             xyz = self.inertial.origin.xyz
@@ -50,10 +50,8 @@ class URDFLink:
             rpy = self.visual.origin.rpy
 
         self.xyz = Vector(xyz)
-        if rpy:
-            self.rot = Euler(rpy, 'XYZ').to_quaternion()
-        else:
-            self.rot = Euler((0,0,0)).to_quaternion()
+        self.rot = Euler(rpy, 'XYZ').to_quaternion()
+
 
 class URDFJoint:
 
@@ -70,7 +68,7 @@ class URDFJoint:
         self.type = urdf_joint.type
 
         xyz = (0,0,0)
-        rpy = None
+        rpy = (0,0,0)
 
         if urdf_joint.origin:
             xyz = urdf_joint.origin.xyz
@@ -80,10 +78,7 @@ class URDFJoint:
                 rpy = urdf_joint.origin.rpy
 
         self.xyz = Vector(xyz)
-        if rpy:
-            self.rot = Euler(rpy, 'XYZ').to_quaternion()
-        else:
-            self.rot = Euler((0,0,0)).to_quaternion()
+        self.rot = Euler(rpy, 'XYZ').to_quaternion()
 
         self.link = URDFLink(urdf_link)
 
@@ -189,27 +184,22 @@ class URDFJoint:
             self.editbone.use_inherit_rotation = True
             self.editbone.parent = parent.editbone
 
-            if len(parent.children) == 1:
+            self.editbone.head = parent.editbone.tail
 
+            if len(parent.children) == 1:
                 # this joint is the only child of the parent joint: connect
                 # them with parent's tail
-                parent.editbone.tail = self.rot * self.xyz + parent.editbone.head
                 self.editbone.use_connect = True
-            else:
-                self.editbone.head = self.rot * self.xyz + parent.editbone.head
 
         else:
             self.editbone.head = (0, 0, 0)
 
-        if self.subjoints:
-            # if we have subjoints, we place the tail of the bone at the origin of the last joint's link.
-            offset = self.subjoints[-1].link.xyz
-        else:
-            offset = self.link.xyz
+        offset = self.rot * self.xyz
         
         if parent and offset == Vector((0,0,0)):
             #TODO: compute an offset based on the joint axis direction
             offset = parent.editbone.tail - parent.editbone.head
+
         self.editbone.tail = self.editbone.head + offset
 
         for child in self.children:
@@ -369,6 +359,12 @@ class URDFJoint:
             visuals = [empty]
 
         for v in visuals:
+            # set link origin and rotation
+            v.location = self.link.xyz
+            v.rotation_mode = "QUATERNION"
+            v.rotation_quaternion = self.link.rot
+            bpymorse.origin_set(type='ORIGIN_CURSOR')
+
             v.matrix_local = armature.data.bones[str(hash(joint.name))].matrix_local
 
             if xyz and rot:
@@ -376,7 +372,11 @@ class URDFJoint:
             elif xyz:
                 v.location += xyz
 
+            # reset rotation
+            v.rotation_quaternion = self.link.rot
+
             self.rescale_object(geometry, v)
+
             self.add_material(v)
 
             # parent the visuals to the armature
