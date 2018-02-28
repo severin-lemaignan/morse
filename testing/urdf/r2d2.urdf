@@ -34,6 +34,8 @@
     <parent link="base_link"/>
     <child link="right_leg"/>
     <origin xyz="0 -0.22 0.25"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="40" lower="-0.5" upper="0.5" velocity="10"/>
   </joint>
 
   <link name="right_base">
