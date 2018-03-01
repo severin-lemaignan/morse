@@ -30,6 +30,24 @@ class BaseTest(MorseTestCase):
         with Morse() as morse:
             r2d2 = morse.r2d2
 
+class MekaTest(MorseTestCase):
+
+    def setUpEnv(self):
+        """ Defines the test scenario, using the Builder API.
+        """
+        r2d2 = URDF('meka', 'meka.urdf')
+        env = Environment('empty', fastmode = True)
+
+    def test_urdf(self):
+        """ Tests the simulator can return the list of robots
+        
+        This test is guaranteed to be started only when the simulator
+        is ready.
+        """
+        with Morse() as morse:
+            meka = morse.meka
+
+
 ########################## Run these tests ##########################
 if __name__ == "__main__":
     from morse.testing.testing import main
