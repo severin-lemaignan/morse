@@ -104,9 +104,11 @@ class URDFJoint:
     def build_editmode(self, armature, parent = None):
         # Create Blender bones
         #
-        # URDF joints map to bones, URDF links map to objects whose origin is
-        # an empty located at the joint's bone's HEAD, and whose orientation
-        # match the URDF's joint frame.
+        # URDF joints map to bones, URDF links map to objects.
+        # Procedure:
+        #   - create bone and set it to joint-position
+        #   - give the bone an lenght close to 0 (=> EPSILON)
+        #   - repeat it for each child
 
         self.editbone = armature.data.edit_bones.new(self.name)
 
@@ -200,7 +202,6 @@ class URDFJoint:
 
     def add_link_frame(self, armature, joint = None, xyz = None, rot = None):
         """
-
         :param joint: if the link has no proper bone (case for fixed joints at
         the end of an armature), we need to specify the joint we want to attach
         the link to (typically, the parent joint)
@@ -215,12 +216,6 @@ class URDFJoint:
         visuals = create_objects_by_link(armature, self.link)
 
         for v in visuals:
-            # set link origin and rotation
-            v.location = self.link.xyz
-            v.rotation_mode = "QUATERNION"
-            v.rotation_quaternion = self.link.rot
-            bpymorse.origin_set(type='ORIGIN_CURSOR')
-
             v.matrix_local = armature.data.bones[joint.name].matrix_local
 
             if xyz and rot:
@@ -304,7 +299,10 @@ class URDFJoint:
         try:
             obj.data.materials.append(mat)
             mat.diffuse_color = (rgba[0], rgba[1], rgba[2])
-        except:
+        except AttributeError:
+            # ==> Camera, Light .. have no material
+            # TODO: Remove this try-except block and implement a
+            # object-type query for catch this error
             pass
 
 
@@ -366,6 +364,7 @@ class URDF(ComponentCreator):
         for root in self.roots:
             root.build_editmode(ob)
 
+        # creating base-link visual, if exist
         if self.base_link.visual:
             visuals = create_objects_by_link(ob, self.base_link)
             for v in visuals:
@@ -377,6 +376,8 @@ class URDF(ComponentCreator):
             root.build_objectmode(ob)
 
 def add_material(urdf_material):
+    """ Add a urdf_material to the global MATERIALS dictonary.
+    """
     global MATERIALS
 
     if urdf_material.name in MATERIALS:
@@ -391,6 +392,13 @@ def add_material(urdf_material):
         MATERIALS[urdf_material.name]['texture'] = urdf_material.texture.filename
 
 def create_objects_by_link(armature, link):
+    """ Creates a object from a given URDFLink.
+        Also sets the armature as parent.
+
+        :param armature: parent armature for the object
+        :param link: related URDFLink
+        :return: list of all created objects
+    """
     visuals = []
 
     if link.visual and link.visual.geometry:
@@ -448,5 +456,12 @@ def create_objects_by_link(armature, link):
         empty.name = link.name
         empty.scale = [0.01, 0.01, 0.01]
         visuals = [empty]
+
+    for v in visuals:
+        # set link origin and rotation
+        v.location = link.xyz
+        v.rotation_mode = "QUATERNION"
+        v.rotation_quaternion = link.rot
+        bpymorse.origin_set(type='ORIGIN_CURSOR')
 
     return visuals
