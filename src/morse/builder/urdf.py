@@ -17,7 +17,7 @@ ROS_SHARE_ROOT=os.environ["ROS_PACKAGE_PATH"].split(":")[0] + "/"
 
 MATERIALS = {}
 
-EPSILON = 0.1
+EPSILON = 0.05
 
 class URDFLink:
 
@@ -27,11 +27,15 @@ class URDFLink:
 
         self.inertial = urdf_link.inertial
         self.visual = urdf_link.visual
+        if self.name == "fixed_base":
+            print(self.visual)
         self.collision = urdf_link.collision
 
         self._get_origin()
 
-        print("..Create Link {}".format(urdf_link.name))
+        if self.name == "fixed_base":
+
+            print("..Create Link {} at {} with {}".format(urdf_link.name, self.xyz, self.rot))
 
     def _get_origin(self):
         """ Links do not define proper origin. We still try to extract one
@@ -41,18 +45,21 @@ class URDFLink:
         xyz = (0,0,0)
         rpy = (0,0,0)
 
-        if self.inertial and self.inertial.origin:
-            xyz = self.inertial.origin.xyz
-            rpy = self.inertial.origin.rpy
-        elif self.collision and self.collision.origin:
-            xyz = self.collision.origin.xyz
-            rpy = self.collision.origin.rpy
-        elif self.visual and self.visual.origin:
+        #if self.inertial and self.inertial.origin:
+        #    xyz = self.inertial.origin.xyz
+        #    rpy = self.inertial.origin.rpy
+        #elif self.collision and self.collision.origin:
+        #    xyz = self.collision.origin.xyz
+        #    rpy = self.collision.origin.rpy
+        if self.visual and self.visual.origin:
             xyz = self.visual.origin.xyz
             rpy = self.visual.origin.rpy
 
         self.xyz = Vector(xyz)
         self.rot = Euler(rpy, 'XYZ').to_quaternion()
+        if self.name == "fixed_base":
+            print(self.xyz)
+            print(self.rot)
 
 
 class URDFJoint:
@@ -127,10 +134,14 @@ class URDFJoint:
 
     def build_objectmode(self, armature, parent = None):
 
-        if not self.children and self.type == self.FIXED:
-            if not parent:
-                return
 
+        try:
+            self.posebone = armature.pose.bones[self.name]
+        except KeyError:
+            print("Error: bone %s not yet added to the armature" % self.name)
+            return
+
+        if not self.children and self.type == self.FIXED:
             target = self.add_link_frame(armature, parent, self.xyz, self.rot)
             
             # Disabled generation of IK targets for now: would require one
@@ -146,12 +157,6 @@ class URDFJoint:
             #    ik.target = target
             ####################################################################
 
-            return
-
-        try:
-            self.posebone = armature.pose.bones[self.name]
-        except KeyError:
-            print("Error: bone %s not yet added to the armature" % self.name)
             return
 
         self.configure_joint(self.posebone)
@@ -284,15 +289,14 @@ class URDFJoint:
         visuals = create_objects_by_link(armature, self.link)
 
         for v in visuals:
-            v.matrix_local = armature.data.bones[joint.name].matrix_local
+            #v.matrix_local = armature.data.bones[joint.name].matrix_local
+
+            v.location = armature.matrix_world * self.posebone.matrix * self.posebone.location
 
             if xyz and rot:
                 v.location += rot * xyz
             elif xyz:
                 v.location += xyz
-
-            # reset rotation
-            v.rotation_quaternion = self.link.rot
 
             self.rescale_object(self.link.visual.geometry, v)
 
@@ -527,9 +531,9 @@ def create_objects_by_link(armature, link):
 
     for v in visuals:
         # set link origin and rotation
-        v.location = link.xyz
+        v.location = v.location + link.xyz
         v.rotation_mode = "QUATERNION"
-        v.rotation_quaternion = link.rot
+        v.rotation_quaternion = v.rotation_quaternion * link.rot
         bpymorse.origin_set(type='ORIGIN_CURSOR')
 
     return visuals
