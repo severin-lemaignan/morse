@@ -153,17 +153,6 @@ class URDFJoint:
             print("Error: bone %s not yet added to the armature" % self.name)
             return
 
-        # Prevent moving or rotating bones that are not end-effectors (outside of IKs)
-        if self.children:
-            self.posebone.lock_location = (True, True, True)
-            self.posebone.lock_rotation = (True, True, True)
-            self.posebone.lock_scale = (True, True, True)
-
-        # initially, lock the IK
-        self.posebone.lock_ik_x = True
-        self.posebone.lock_ik_y = True
-        self.posebone.lock_ik_z = True
-
         self.configure_joint(self.posebone)
 
         self.add_link_frame(armature)
@@ -173,32 +162,93 @@ class URDFJoint:
 
     def configure_joint(self, posebone):
 
-        # First, configure joint axis
-        if not self.axis:
+        self.posebone.lock_location = (True, True, True)
+        self.posebone.lock_rotation = (True, True, True)
+        self.posebone.lock_scale = (True, True, True)
+
+        if self.type == self.FIXED:
+            # This is not really a joint because it cannot move.
+            # All degrees of freedom are locked.
             return
 
-        print("Joint axis for <%s> (%s): %s" % (self.name, self.type, self.axis))
+        elif self.type == self.REVOLUTE:
+            # a hinge joint that rotates along the axis and has
+            # a limited range specified by the upper and lower limits. 
+
+            if not self.axis:
+                # defaults to (1,0,0)
+                self.axis = (1, 0, 0)
+
+            if self.limit:
+                c = self.posebone.constraints.new('LIMIT_ROTATION')
+                c.owner_space = 'LOCAL'
 
 
-        # Then, IK limits
-        if self.axis[0]:
-            posebone.lock_ik_x = False
-            posebone.use_ik_limit_x = True
+            if self.axis[0]: # x
+                self.posebone.lock_rotation[0] = False
+
+                if self.limit:
+                    c.use_limit_x = True
+                    c.min_x = self.limit.lower
+                    c.max_x = self.limit.upper
+
+            if self.axis[1]: # y
+                self.posebone.lock_rotation[1] = False
+
+                if self.limit:
+                    c.use_limit_y = True
+                    c.min_y = self.limit.lower
+                    c.max_y = self.limit.upper
+
+            if self.axis[2]: # z
+                self.posebone.lock_rotation[2] = False
+
+                if self.limit:
+                    c.use_limit_z = True
+                    c.min_z = self.limit.lower
+                    c.max_z = self.limit.upper
+
+
+
+        elif self.type == self.PRISMATIC:
+            # a sliding joint that slides along the axis, and has a
+            # limited range specified by the upper and lower limits
+
+            if not self.axis:
+                # defaults to (1,0,0)
+                self.axis = (1, 0, 0)
+
             if self.limit:
-                posebone.ik_max_x = self.limit.upper
-                posebone.ik_min_x = self.limit.lower
-        elif self.axis[1]:
-            posebone.lock_ik_y = False
-            posebone.use_ik_limit_y = True
-            if self.limit:
-                posebone.ik_max_y = self.limit.upper
-                posebone.ik_min_y = self.limit.lower
-        elif self.axis[2]:
-            posebone.lock_ik_z = False
-            posebone.use_ik_limit_z = True
-            if self.limit:
-                posebone.ik_max_z = self.limit.upper
-                posebone.ik_min_z = self.limit.lower
+                c = self.posebone.constraints.new('LIMIT_LOCATION')
+                c.owner_space = 'LOCAL'
+
+            if self.axis[0]: # x
+                self.posebone.lock_location[0] = False
+
+                if self.limit:
+                    c.use_max_x = True
+                    c.min_x = self.limit.lower
+                    c.max_x = self.limit.upper
+
+            if self.axis[1]: # y
+                self.posebone.lock_location[1] = False
+
+                if self.limit:
+                    c.use_max_y = True
+                    c.min_y = self.limit.lower
+                    c.max_y = self.limit.upper
+
+            if self.axis[2]: # z
+                self.posebone.lock_location[2] = False
+
+                if self.limit:
+                    c.use_max_z = True
+                    c.min_z = self.limit.lower
+                    c.max_z = self.limit.upper
+
+        else:
+            print("Joint type ({}) configuration not implemented yet".format(self.type))
+            return
 
     def add_link_frame(self, armature, joint = None, xyz = None, rot = None):
         """

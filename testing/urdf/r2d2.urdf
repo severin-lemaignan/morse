@@ -30,7 +30,7 @@
     </visual>
   </link>
 
-  <joint name="base_to_right_leg" type="continuous">
+  <joint name="base_to_right_leg" type="revolute">
     <parent link="base_link"/>
     <child link="right_leg"/>
     <origin xyz="0 -0.22 0.25"/>
@@ -47,7 +47,7 @@
     </visual>
   </link>
 
-  <joint name="right_base_joint" type="continuous">
+  <joint name="right_base_joint" type="revolute">
     <parent link="right_leg"/>
     <child link="right_base"/>
     <origin xyz="0 0 -0.6"/>
@@ -63,7 +63,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </visual>
   </link>
-  <joint name="right_front_wheel_joint" type="continuous">
+  <joint name="right_front_wheel_joint" type="revolute">
     <parent link="right_base"/>
     <child link="right_front_wheel"/>
     <origin rpy="0 0 0" xyz="0.133333333333 0 -0.085"/>
@@ -78,7 +78,7 @@
       <material name="black"/>
     </visual>
   </link>
-  <joint name="right_back_wheel_joint" type="continuous">
+  <joint name="right_back_wheel_joint" type="revolute">
     <parent link="right_base"/>
     <child link="right_back_wheel"/>
     <origin rpy="0 0 0" xyz="-0.133333333333 0 -0.085"/>
@@ -94,7 +94,7 @@
     </visual>
   </link>
 
-  <joint name="base_to_left_leg" type="continuous">
+  <joint name="base_to_left_leg" type="revolute">
     <parent link="base_link"/>
     <child link="left_leg"/>
     <origin xyz="0 0.22 0.25"/>
@@ -109,7 +109,7 @@
     </visual>
   </link>
 
-  <joint name="left_base_joint" type="continuous">
+  <joint name="left_base_joint" type="revolute">
     <parent link="left_leg"/>
     <child link="left_base"/>
     <origin xyz="0 0 -0.6"/>
@@ -124,7 +124,7 @@
       <material name="black"/>
     </visual>
   </link>
-  <joint name="left_front_wheel_joint" type="continuous">
+  <joint name="left_front_wheel_joint" type="revolute">
     <parent link="left_base"/>
     <child link="left_front_wheel"/>
     <origin rpy="0 0 0" xyz="0.133333333333 0 -0.085"/>
@@ -139,13 +139,13 @@
       <material name="black"/>
     </visual>
   </link>
-  <joint name="left_back_wheel_joint" type="continuous">
+  <joint name="left_back_wheel_joint" type="revolute">
     <parent link="left_base"/>
     <child link="left_back_wheel"/>
     <origin rpy="0 0 0" xyz="-0.133333333333 0 -0.085"/>
   </joint>
 
-  <joint name="gripper_extension" type="continuous">
+  <joint name="gripper_extension" type="revolute">
     <parent link="base_link"/>
     <child link="gripper_pole"/>
     <origin rpy="0 0 0" xyz="0.19 0 0.2"/>
@@ -160,7 +160,7 @@
     </visual>
   </link>
 
-  <joint name="left_gripper_joint" type="continuous">
+  <joint name="left_gripper_joint" type="revolute">
     <origin rpy="0 0 0" xyz="0.2 0.01 0"/>
     <parent link="gripper_pole"/>
     <child link="left_gripper"/>
@@ -169,14 +169,14 @@
   <link name="left_gripper">
   </link>
 
-  <joint name="left_tip_joint" type="continuous">
+  <joint name="left_tip_joint" type="revolute">
     <parent link="left_gripper"/>
     <child link="left_tip"/>
   </joint>
 
   <link name="left_tip">
   </link>
-  <joint name="right_gripper_joint" type="continuous">
+  <joint name="right_gripper_joint" type="revolute">
     <origin rpy="0 0 0" xyz="0.2 -0.01 0"/>
     <parent link="gripper_pole"/>
     <child link="right_gripper"/>
@@ -185,7 +185,7 @@
   <link name="right_gripper">
   </link>
 
-  <joint name="right_tip_joint" type="continuous">
+  <joint name="right_tip_joint" type="revolute">
     <parent link="right_gripper"/>
     <child link="right_tip"/>
   </joint>
@@ -201,7 +201,7 @@
       <material name="white"/>
     </visual>
   </link>
-  <joint name="head_swivel" type="continuous">
+  <joint name="head_swivel" type="revolute">
     <parent link="base_link"/>
     <child link="head"/>
     <origin xyz="0 0 0.3"/>
@@ -216,7 +216,7 @@
     </visual>
   </link>
 
-  <joint name="tobox" type="continuous">
+  <joint name="tobox" type="revolute">
     <parent link="head"/>
     <child link="box"/>
     <origin xyz="0.1814 0 0.1414"/>
