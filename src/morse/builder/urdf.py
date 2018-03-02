@@ -27,15 +27,11 @@ class URDFLink:
 
         self.inertial = urdf_link.inertial
         self.visual = urdf_link.visual
-        if self.name == "fixed_base":
-            print(self.visual)
         self.collision = urdf_link.collision
 
         self._get_origin()
 
-        if self.name == "fixed_base":
-
-            print("..Create Link {} at {} with {}".format(urdf_link.name, self.xyz, self.rot))
+        print("..Create Link {} at {} with {}".format(urdf_link.name, self.xyz, self.rot))
 
     def _get_origin(self):
         """ Links do not define proper origin. We still try to extract one
@@ -57,10 +53,6 @@ class URDFLink:
 
         self.xyz = Vector(xyz)
         self.rot = Euler(rpy, 'XYZ').to_quaternion()
-        if self.name == "fixed_base":
-            print(self.xyz)
-            print(self.rot)
-
 
 class URDFJoint:
 
@@ -271,7 +263,6 @@ class URDFJoint:
 
         else:
             print("Joint type ({}) configuration not implemented yet".format(self.type))
-            return
 
     def add_link_frame(self, armature, joint = None, xyz = None, rot = None):
         """
