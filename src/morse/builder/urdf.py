@@ -17,7 +17,7 @@ ROS_SHARE_ROOT=os.environ["ROS_PACKAGE_PATH"].split(":")[0] + "/"
 
 MATERIALS = {}
 
-EPSILON = 0.00001
+EPSILON = 0.1
 
 class URDFLink:
 
@@ -369,7 +369,7 @@ class URDF(ComponentCreator):
             visuals = create_objects_by_link(ob, self.base_link)
             for v in visuals:
                 v.parent = ob
-                v.parent_type = "ARMATURE"
+                v.parent_type = "OBJECT"
 
         bpymorse.mode_set(mode='OBJECT')
         for root in self.roots:
