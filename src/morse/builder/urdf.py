@@ -61,8 +61,9 @@ class URDFJoint:
     FIXED = "fixed"
     PRISMATIC = "prismatic"
     REVOLUTE = "revolute"
+    CONTINUOUS = "continuous"
 
-    TYPES = [FIXED, PRISMATIC, REVOLUTE]
+    TYPES = [FIXED, PRISMATIC, REVOLUTE, CONTINUOUS]
 
     def __init__(self, urdf_joint, urdf_link):
         print("Create Joint {}".format(urdf_joint.name))
@@ -245,6 +246,23 @@ class URDFJoint:
                     c.use_max_z = True
                     c.min_z = self.limit.lower
                     c.max_z = self.limit.upper
+
+        elif self.type == self.CONTINUOUS:
+            # a continuous hinge joint that rotates around
+            # the axis and has no upper and lower limits 
+
+            if not self.axis:
+                # defaults to (1,0,0)
+                self.axis = (1, 0, 0)
+
+            if self.axis[0]: # x
+                self.posebone.lock_rotation[0] = False
+
+            if self.axis[1]: # y
+                self.posebone.lock_rotation[1] = False
+
+            if self.axis[2]: # z
+                self.posebone.lock_rotation[2] = False
 
         else:
             print("Joint type ({}) configuration not implemented yet".format(self.type))
