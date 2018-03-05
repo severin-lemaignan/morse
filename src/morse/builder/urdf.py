@@ -178,9 +178,17 @@ class URDFJoint:
         if self.limit:
             lu = self.limit.upper
             ll = self.limit.lower
-        else:
-            lu = 0
-            ll = 0
+
+            # if we have negativ axis like axis="0 -1 0"
+            # we have to reverse the limits and negate them
+            limit_x_lower = ll if (ax > 0) else -lu
+            limit_x_upper = lu if (ax > 0) else -ll
+
+            limit_y_lower = ll if (ay > 0) else -lu
+            limit_y_upper = lu if (ay > 0) else -ll
+
+            limit_z_lower = ll if (az > 0) else -lu
+            limit_z_upper = lu if (az > 0) else -ll
 
         if self.type == self.FIXED:
             # This is not really a joint because it cannot move.
@@ -200,24 +208,24 @@ class URDFJoint:
 
                 if self.limit:
                     c.use_limit_x = True
-                    c.min_x = ll if (ax > 0) else -lu
-                    c.max_x = lu if (ax > 0) else -ll
+                    c.min_x = limit_x_lower
+                    c.max_x = limit_x_upper
 
-            if ay: # y
+            if ay: # y-axis
                 self.posebone.lock_rotation[1] = False
 
                 if self.limit:
                     c.use_limit_y = True
-                    c.min_y = ll if (ay > 0) else -lu
-                    c.max_y = lu if (ay > 0) else -ll
+                    c.min_y = limit_y_lower
+                    c.max_y = limit_y_upper
 
-            if az: # z
+            if az: # z-axis
                 self.posebone.lock_rotation[2] = False
 
                 if self.limit:
                     c.use_limit_z = True
-                    c.min_z = ll if (az > 0) else -lu
-                    c.max_z = lu if (az > 0) else -ll
+                    c.min_z = limit_z_lower
+                    c.max_z = limit_z_upper
 
 
         elif self.type == self.PRISMATIC:
@@ -228,48 +236,44 @@ class URDFJoint:
                 c = self.posebone.constraints.new('LIMIT_LOCATION')
                 c.owner_space = 'LOCAL'
 
-            if ax: # x
+            if ax: # x-axis
                 self.posebone.lock_location[0] = False
 
                 if self.limit:
                     c.use_min_x = True
                     c.use_max_x = True
-                    c.min_x = ll if (az > 0) else -lu
-                    c.max_x = lu if (az > 0) else -ll
+                    c.min_x = limit_x_lower
+                    c.max_x = limit_x_upper
 
-            if ay: # y
+            if ay: # y-axis
                 self.posebone.lock_location[1] = False
 
                 if self.limit:
                     c.use_min_y = True
                     c.use_max_y = True
-                    c.min_y = ll if (ay > 0) else -lu
-                    c.max_y = lu if (ay > 0) else -ll
+                    c.min_y = limit_y_lower
+                    c.max_y = limit_y_upper
 
-            if az: # z
+            if az: # z-axis
                 self.posebone.lock_location[2] = False
 
                 if self.limit:
                     c.use_min_z = True
                     c.use_max_z = True
-                    c.min_z = ll if (az > 0) else -lu
-                    c.max_z = lu if (az > 0) else -ll
+                    c.min_z = limit_z_lower
+                    c.max_z = limit_z_upper
 
         elif self.type == self.CONTINUOUS:
             # a continuous hinge joint that rotates around
             # the axis and has no upper and lower limits 
 
-            if not self.axis:
-                # defaults to (1,0,0)
-                self.axis = (1, 0, 0)
-
-            if self.axis[0]: # x
+            if ax: # x-axis
                 self.posebone.lock_rotation[0] = False
 
-            if self.axis[1]: # y
+            if ay: # y-axis
                 self.posebone.lock_rotation[1] = False
 
-            if self.axis[2]: # z
+            if az: # z-axis
                 self.posebone.lock_rotation[2] = False
 
         else:
