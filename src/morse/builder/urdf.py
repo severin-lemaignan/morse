@@ -277,7 +277,7 @@ class URDFJoint:
         if not joint:
             joint = self
 
-        visuals = create_objects_by_link(armature, self.link)
+        visuals = create_objects_by_link(self.link)
 
         for v in visuals:
             #v.matrix_local = armature.data.bones[joint.name].matrix_local
@@ -429,7 +429,7 @@ class URDF(ComponentCreator):
 
         # creating base-link visual, if exist
         if self.base_link.visual:
-            visuals = create_objects_by_link(ob, self.base_link)
+            visuals = create_objects_by_link(self.base_link)
             for v in visuals:
                 v.parent = ob
                 v.parent_type = "OBJECT"
@@ -454,11 +454,10 @@ def add_material(urdf_material):
     if urdf_material.texture and urdf_material.texture.filename:
         MATERIALS[urdf_material.name]['texture'] = urdf_material.texture.filename
 
-def create_objects_by_link(armature, link):
-    """ Creates a object from a given URDFLink.
-        Also sets the armature as parent.
+def create_objects_by_link(link):
+    """ Creates a object from a given URDFLink and
+        set the correct origin.
 
-        :param armature: parent armature for the object
         :param link: related URDFLink
         :return: list of all created objects
     """
