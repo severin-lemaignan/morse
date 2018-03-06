@@ -28,6 +28,7 @@ class BaseTest(MorseTestCase):
         is ready.
         """
         with Morse() as morse:
+            print("JJJJJJJJJJJJ")
             r2d2 = morse.r2d2
 
 

@@ -119,14 +119,16 @@ class URDFJoint:
 
         if parent:
             self.editbone.parent = parent.editbone
-            self.editbone.head = self.rot * self.xyz + parent.editbone.head
-
+            self.editbone.head = parent.editbone.head + (parent.rot * self.xyz)
+            self.rot = parent.rot * self.rot
         else:
-            self.editbone.head = self.rot * self.xyz
+            self.editbone.head = self.xyz
+
+        #print(self.name, self.editbone.matrix, sep='\n')
 
         # y-axis of the bone is going toward the bones tails
         # so we give it the global direction here.
-        self.editbone.tail = self.rot * Vector((0, EPSILON, 0)) + self.editbone.head
+        self.editbone.tail = Vector((0, EPSILON, 0)) + self.editbone.head
 
         for child in self.children:
             child.build_editmode(armature, self)
@@ -140,24 +142,6 @@ class URDFJoint:
             print("Error: bone %s not yet added to the armature" % self.name)
             return
 
-        if not self.children and self.type == self.FIXED:
-            target = self.add_link_frame(armature, parent, self.xyz, self.rot)
-            
-            # Disabled generation of IK targets for now: would require one
-            # armature per 'kinematic group' to work well (currently, it creates 
-            # cycles
-            #
-            ## if the parent has only one such 'end frame', use it as IK target
-            ## TODO: if more than one, select one randomly?
-            #if len(parent.children) == 1:
-            #    ik = parent.posebone.constraints.new("IK")
-            #    ik.use_rotation = True
-            #    ik.use_tail = True
-            #    ik.target = target
-            ####################################################################
-
-            return
-
         self.configure_joint(self.posebone)
 
         self.add_link_frame(armature)
@@ -166,7 +150,6 @@ class URDFJoint:
             child.build_objectmode(armature, self)
 
     def configure_joint(self, posebone):
-
         self.posebone.lock_location = (True, True, True)
         self.posebone.lock_rotation = (True, True, True)
         self.posebone.lock_scale = (True, True, True)
@@ -201,7 +184,7 @@ class URDFJoint:
 
             if self.limit:
                 c = self.posebone.constraints.new('LIMIT_ROTATION')
-                c.owner_space = 'LOCAL'
+                c.owner_space = 'WORLD'
 
             if ax: # x-axis
                 self.posebone.lock_rotation[0] = False
@@ -234,7 +217,7 @@ class URDFJoint:
 
             if self.limit:
                 c = self.posebone.constraints.new('LIMIT_LOCATION')
-                c.owner_space = 'LOCAL'
+                c.owner_space = 'WORLD'
 
             if ax: # x-axis
                 self.posebone.lock_location[0] = False
@@ -279,7 +262,7 @@ class URDFJoint:
         else:
             print("Joint type ({}) configuration not implemented yet".format(self.type))
 
-    def add_link_frame(self, armature, joint = None, xyz = None, rot = None):
+    def add_link_frame(self, armature, joint = None):
         """
         :param joint: if the link has no proper bone (case for fixed joints at
         the end of an armature), we need to specify the joint we want to attach
@@ -295,14 +278,8 @@ class URDFJoint:
         visuals = create_objects_by_link(self.link)
 
         for v in visuals:
-            #v.matrix_local = armature.data.bones[joint.name].matrix_local
-
             v.location = armature.matrix_world * self.posebone.matrix * self.posebone.location
-
-            if xyz and rot:
-                v.location += rot * xyz
-            elif xyz:
-                v.location += xyz
+            v.rotation_quaternion = v.rotation_quaternion * joint.rot
 
             self.rescale_object(self.link.visual.geometry, v)
 
