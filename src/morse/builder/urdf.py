@@ -184,7 +184,7 @@ class URDFJoint:
 
             if self.limit:
                 c = self.posebone.constraints.new('LIMIT_ROTATION')
-                c.owner_space = 'WORLD'
+                c.owner_space = 'LOCAL'
 
             if ax: # x-axis
                 self.posebone.lock_rotation[0] = False
@@ -217,7 +217,7 @@ class URDFJoint:
 
             if self.limit:
                 c = self.posebone.constraints.new('LIMIT_LOCATION')
-                c.owner_space = 'WORLD'
+                c.owner_space = 'LOCAL'
 
             if ax: # x-axis
                 self.posebone.lock_location[0] = False
