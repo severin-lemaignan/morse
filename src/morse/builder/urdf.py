@@ -128,7 +128,7 @@ class URDFJoint:
 
         # y-axis of the bone is going toward the bones tails
         # so we give it the global direction here.
-        self.editbone.tail = Vector((0, EPSILON, 0)) + self.editbone.head
+        self.editbone.tail = self.rot * Vector((0, EPSILON, 0)) + self.editbone.head
 
         for child in self.children:
             child.build_editmode(armature, self)
