@@ -1,3 +1,4 @@
+import logging; logger = logging.getLogger("morsebuilder." + __name__)
 import math
 from morse.core.mathutils import Vector, Matrix, Euler
 import copy
@@ -6,14 +7,21 @@ from morse.builder import bpymorse
 
 from morse.builder.creator import ComponentCreator
 
-from urdf_parser_py.urdf import URDF as URDFparser
-from urdf_parser_py.urdf import Mesh, Box, Cylinder, Sphere
+
+URDFparser = None
+
+try:
+    from urdf_parser_py.urdf import URDF as URDFparser
+    from urdf_parser_py.urdf import Mesh, Box, Cylinder, Sphere
+except ImportError:
+    logger.error("[URDF] to load URDF files, you must first install urdf_parser_py")
+
 
 # Meshes are referenced in the URDF file relative to their package, eg:
 # 'package://pepper_meshes/meshes/1.0/Torso.dae'
 # MORSE will replace 'package://' by 'ROS_SHARE_ROOT':
 import os
-ROS_SHARE_ROOT=os.environ["ROS_PACKAGE_PATH"].split(":")[0] + "/"
+ROS_SHARE_ROOT=os.environ.get("ROS_PACKAGE_PATH","/opt/ros/kinetic/share").split(":")[0] + "/"
 
 MATERIALS = {}
 
@@ -31,7 +39,7 @@ class URDFLink:
 
         self._get_origin()
 
-        print("..Create Link {} at {} with {}".format(urdf_link.name, self.xyz, self.rot))
+        logger.debug("[URDF] create Link {} at {} with {}".format(urdf_link.name, self.xyz, self.rot))
 
     def _get_origin(self):
         """ Links do not define proper origin. We still try to extract one
@@ -65,7 +73,7 @@ class URDFJoint:
     TYPES = [FIXED, PRISMATIC, REVOLUTE, CONTINUOUS]
 
     def __init__(self, urdf_joint, urdf_link):
-        print("Create Joint {}".format(urdf_joint.name))
+        logger.debug("[URDF] create Joint {}".format(urdf_joint.name))
         
         self.name = urdf_joint.name
         self.type = urdf_joint.type
@@ -139,7 +147,7 @@ class URDFJoint:
         try:
             self.posebone = armature.pose.bones[self.name]
         except KeyError:
-            print("Error: bone %s not yet added to the armature" % self.name)
+            logger.error("[ERROR][URDF] bone %s not yet added to the armature" % self.name)
             return
 
         self.configure_joint(self.posebone)
@@ -260,7 +268,7 @@ class URDFJoint:
                 self.posebone.lock_rotation[2] = False
 
         else:
-            print("Joint type ({}) configuration not implemented yet".format(self.type))
+            logger.warning("[URDF] joint type ({}) configuration not implemented yet".format(self.type))
 
     def add_link_frame(self, armature, joint = None):
         """
@@ -292,13 +300,7 @@ class URDFJoint:
             v.parent_type = "BONE"
 
     def rescale_object(self, geometry, obj):
-        if isinstance(geometry, Mesh):
-            if geometry.scale:
-                obj.scale = [obj.scale[0] * geometry.scale[0],
-                             obj.scale[1] * geometry.scale[1],
-                             obj.scale[2] * geometry.scale[2]]
-
-        elif isinstance(geometry, Box):
+        if isinstance(geometry, Box):
             obj.dimensions = geometry.size
 
         elif isinstance(geometry, Cylinder):
@@ -323,7 +325,7 @@ class URDFJoint:
         material = self.link.visual.material
 
         if not material.name:
-            print("Found material without name: {}".format(self.link.material))
+            logger.warning("[URDF] found material without name: {}".format(self.link.material))
             return
 
         rgba = None
@@ -340,7 +342,7 @@ class URDFJoint:
         # global material
         else:
             if material.name not in MATERIALS:
-                print("Global material not found: {}".format(material.name))
+                logger.warning("[URDF] global material not found: {}".format(material.name))
                 return
 
             rgba = MATERIALS[material.name]['color']
@@ -364,26 +366,24 @@ class URDFJoint:
     def __repr__(self):
         return "URDF joint<%s>" % self.name
 
-class URDF(ComponentCreator):
+class URDF:
 
-    _classpath="morse.robots.urdf.URDF"
-
-    def __init__(self, name, urdf):
-
-        ComponentCreator.__init__(self, 
-                                name, 
-                                'robots')
+    def __init__(self, urdf):
 
         self.urdf_file = urdf
+        if URDFparser is None:
+            logger.error("[URDF] Can not load URDF file: urdf_parser_py not available")
+            return
+
         self.urdf = URDFparser.from_xml_string(open(urdf,'r').read())
+
+        self.name = self.urdf.name
 
         for mat in self.urdf.materials:
             add_material(mat)
 
         self.base_link = URDFLink(self.urdf.link_map[self.urdf.get_root()])
         self.roots = self._walk_urdf(self.urdf.link_map[self.urdf.get_root()])
-
-        self.build()
 
     def _walk_urdf(self, link, parent_bone = None):
         bones = []
@@ -403,7 +403,15 @@ class URDF(ComponentCreator):
 
 
     def build(self):
-        # Create armature and object
+        """
+        Create the armature and linked objects from the URDF description given at
+        class instantiation.
+
+        :return: the root object created from the URDF file
+        """
+        if self.urdf is None:
+            return None
+
         bpymorse.add_object(
             type='ARMATURE', 
             enter_editmode=True,
@@ -427,8 +435,11 @@ class URDF(ComponentCreator):
                 v.parent_type = "OBJECT"
 
         bpymorse.mode_set(mode='OBJECT')
+
         for root in self.roots:
             root.build_objectmode(ob)
+
+        return ob
 
 def add_material(urdf_material):
     """ Add a urdf_material to the global MATERIALS dictonary.
@@ -461,16 +472,18 @@ def create_objects_by_link(link):
         if isinstance(geometry, Mesh):
 
             path = geometry.filename.replace("package:/", ROS_SHARE_ROOT)
+            path = path.replace("file://", "")
             # Save a list of objects names before importing Collada/STL
             objects_names = [obj.name for obj in bpymorse.get_objects()]
 
-            if ('.dae' in geometry.filename):
+            if '.dae' in geometry.filename:
                 # Import Collada from filepath
                 bpymorse.collada_import(filepath=path)
                 # Get a list of the imported objects
                 visuals = [obj for obj in bpymorse.get_objects() \
                               if obj.name not in objects_names]
-            elif ('.stl' in geometry.filename):
+
+            elif '.stl' in geometry.filename:
                 bpymorse.stl_import(filepath=path)
                 # Get a list of the imported objects
                 visuals = [obj for obj in bpymorse.get_objects() \
