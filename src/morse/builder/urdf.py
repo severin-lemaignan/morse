@@ -26,7 +26,7 @@ ROS_SHARE_ROOT=os.environ.get("ROS_PACKAGE_PATH","/opt/ros/kinetic/share").split
 
 MATERIALS = {}
 
-EPSILON = 0.0001
+EPSILON = 0.05
 
 class URDFLink:
 
@@ -290,6 +290,10 @@ class URDFJoint:
             v.parent = armature
             v.parent_bone = self.name
             v.parent_type = "BONE"
+
+            # visual has to be attached on bone's head
+            vector = Vector([abs(k) for k in self.rot_real * self.posebone.vector])
+            v.location -= vector
 
     def add_material(self, obj):
         """ Adding material to scene if not exist and let
