@@ -292,8 +292,11 @@ class URDFJoint:
             v.parent_type = "BONE"
 
             # visual has to be attached on bone's head
-            vector = Vector([abs(k) for k in self.rot_real * self.posebone.vector])
-            v.location -= vector
+            # so we're goint on negativ on bone's y-axis
+            # since every bone got a EPSILON-Length we
+            # have to go -EPSILON
+            v.location -= Vector((0, EPSILON, 0))
+
 
     def add_material(self, obj):
         """ Adding material to scene if not exist and let
