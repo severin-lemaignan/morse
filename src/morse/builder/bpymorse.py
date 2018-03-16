@@ -122,7 +122,6 @@ def active_object():
     else:
         return None
 
-
 def get_selected_objects():
     if bpy:
         return bpy.context.selected_objects
@@ -158,6 +157,24 @@ def get_material(name_or_id):
 
 def get_last_material():
     return get_material(-1)
+
+def get_textures():
+    if bpy:
+        return bpy.data.textures
+    else:
+        return None
+
+def get_texture(name_or_id):
+    if bpy and bpy.data.textures:
+        return bpy.data.textures.get(name_or_id)
+    else:
+        return None
+
+def get_images():
+    if bpy:
+        return bpy.data.images
+    else:
+        return None
 
 def new_text():
     if bpy:

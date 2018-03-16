@@ -320,7 +320,7 @@ class URDFJoint:
             return
 
         rgba = None
-        texture = None
+        filename = None
 
         # local material
         if material.color or material.texture:
@@ -328,7 +328,7 @@ class URDFJoint:
                 rgba = material.color.rgba
 
             if material.texture:
-                texture = material.texture
+                filename = material.texture.filename
 
         # global material
         else:
@@ -337,15 +337,36 @@ class URDFJoint:
                 return
 
             rgba = MATERIALS[material.name]['color']
-            texture = MATERIALS[material.name]['texture']
+            filename = MATERIALS[material.name]['texture']
 
 
         mat = bpymorse.get_material(material.name)
         if not mat:
             mat = bpymorse.get_materials().new(name=material.name)
 
-        obj.data.materials.append(mat)
-        mat.diffuse_color = (rgba[0], rgba[1], rgba[2])
+        if rgba:
+            obj.data.materials.append(mat)
+            mat.diffuse_color = (rgba[0], rgba[1], rgba[2])
+
+        if filename:
+            path = filename.replace("package:/", ROS_SHARE_ROOT)
+            path = path.replace("file://", "")
+
+            print("Load Texture: " + path)
+            tex = self.load_texture(path)
+            slot = mat.texture_slots.add()
+            slot.texture = tex
+            slot.texture_coords = 'ORCO'
+
+            #mat.add_texture(texture = tex, texture_coordinates = 'ORCO', map_to = 'COLOR')
+
+    def load_texture(self, img_path):
+        img = bpymorse.get_images().load(img_path)
+
+        tex_name = img_path.split('/')[-1]
+        tex = bpymorse.get_textures().new(name=tex_name, type='IMAGE')
+        tex.image = img
+        return tex
 
     def __repr__(self):
         return "URDF joint<%s>" % self.name
