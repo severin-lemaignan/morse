@@ -34,10 +34,11 @@ class URDFLink:
 
         self.name = urdf_link.name
         self.visual = urdf_link.visual
+        self.collision = urdf_link.collision
+
 
         # TODO: implement these
         self.inertial = urdf_link.inertial
-        self.collision = urdf_link.collision
 
         self._get_origin()
 
@@ -45,15 +46,28 @@ class URDFLink:
 
     def _get_origin(self):
 
-        xyz = (0,0,0)
-        rpy = (0,0,0)
+        xyz_v = (0,0,0)
+        rpy_v = (0,0,0)
+
+        xyz_c = (0,0,0)
+        rpy_c = (0,0,0)
+
+        xyz_i = (0,0,0)
+        rpy_i = (0,0,0)
 
         if self.visual and self.visual.origin:
-            xyz = self.visual.origin.xyz
-            rpy = self.visual.origin.rpy
+            xyz_v = self.visual.origin.xyz
+            rpy_v = self.visual.origin.rpy
 
-        self.xyz = Vector(xyz)
-        self.rot = Euler(rpy, 'XYZ').to_quaternion()
+        if self.collision and self.collision.origin:
+            xyz_c = self.collision.origin.xyz
+            rpy_c = self.collision.origin.rpy
+
+        self.xyz_v = Vector(xyz_v)
+        self.rot_v = Euler(rpy_v, 'XYZ').to_quaternion()
+
+        self.xyz_c = Vector(xyz_c)
+        self.rot_c = Euler(rpy_c, 'XYZ').to_quaternion()
 
 class URDFJoint:
 
@@ -281,22 +295,24 @@ class URDFJoint:
             logger.debug("[URDF] no visual found for {}".format(self.link.name))
             return
 
-        visuals = create_objects_by_link(self.link)
+        visuals = create_objects_by_link(self.link, 'visual')
+        collisions = create_objects_by_link(self.link, 'collision')
 
-        for v in visuals:
-            self.add_material(v)
+        objects = visuals + collisions
+
+        for obj in objects:
+            self.add_material(obj)
 
             # parent the visuals to the armature
-            v.parent = armature
-            v.parent_bone = self.name
-            v.parent_type = "BONE"
+            obj.parent = armature
+            obj.parent_bone = self.name
+            obj.parent_type = "BONE"
 
             # visual has to be attached on bone's head
-            # so we're goint on negativ on bone's y-axis
-            # since every bone got a EPSILON-Length we
+            # so we're going negativ on bone's y-axis.
+            # Since every bone got a EPSILON-Length we
             # have to go -EPSILON
-            v.location -= Vector((0, EPSILON, 0))
-
+            obj.location -= Vector((0, EPSILON, 0))
 
     def add_material(self, obj):
         """ Adding material to scene if not exist and let
@@ -357,8 +373,6 @@ class URDFJoint:
             slot = mat.texture_slots.add()
             slot.texture = tex
             slot.texture_coords = 'ORCO'
-
-            #mat.add_texture(texture = tex, texture_coordinates = 'ORCO', map_to = 'COLOR')
 
     def load_texture(self, img_path):
         img = bpymorse.get_images().load(img_path)
@@ -437,7 +451,7 @@ class URDF:
 
         # creating base-link visual, if exist
         if self.base_link.visual:
-            visuals = create_objects_by_link(self.base_link)
+            visuals = create_objects_by_link(self.base_link, 'visual')
             for v in visuals:
                 v.parent = ob
                 v.parent_type = "OBJECT"
@@ -466,7 +480,7 @@ def add_material(urdf_material):
     if urdf_material.texture and urdf_material.texture.filename:
         MATERIALS[urdf_material.name]['texture'] = urdf_material.texture.filename
 
-def create_objects_by_link(link):
+def create_objects_by_link(link, g_type):
     """ Creates a object from a given URDFLink and
         set the correct origin.
 
@@ -476,9 +490,15 @@ def create_objects_by_link(link):
 
     visuals = []
 
-    if link.visual and link.visual.geometry:
-        geometry = link.visual.geometry
+    geometry = None
+    if g_type == 'visual':
+        if link.visual and link.visual.geometry:
+            geometry = link.visual.geometry
+    elif g_type == 'collision':
+        if link.collision and link.collision.geometry:
+            geometry = link.collision.geometry
 
+    if geometry:
         if isinstance(geometry, Mesh):
 
             path = geometry.filename.replace("package:/", ROS_SHARE_ROOT)
@@ -525,19 +545,31 @@ def create_objects_by_link(link):
             visuals = [ob]
 
     else:
-        bpymorse.add_empty(type = "ARROWS")
+        if g_type == 'visual':
+            bpymorse.add_empty(type = "ARROWS")
 
-        empty = bpymorse.get_first_selected_object()
-        empty.name = link.name
-        empty.scale = [0.01, 0.01, 0.01]
-        visuals = [empty]
+            empty = bpymorse.get_first_selected_object()
+            empty.name = link.name
+            empty.scale = [0.01, 0.01, 0.01]
+            visuals = [empty]
+
+    if g_type == 'visual':
+        xyz = link.xyz_v
+        rot = link.rot_v
+    elif g_type == 'collision':
+        xyz = link.xyz_c
+        rot = link.rot_c
 
     for v in visuals:
         # set link origin and rotation
-        v.location = link.xyz
+        v.location = xyz
         v.rotation_mode = "QUATERNION"
-        v.rotation_quaternion = link.rot
+        v.rotation_quaternion *= rot
         bpymorse.origin_set(type='ORIGIN_CURSOR')
+
+        if g_type == 'collision':
+            v.name += '_bb'
+            v.hide = True
 
     # currently we ignore cameras and lamps
     # which could be imported by collada/stl files
