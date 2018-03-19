@@ -283,6 +283,15 @@ class URDFJoint:
             if az: # z-axis
                 posebone.lock_rotation[2] = False
 
+        elif self.type == self.FLOATING:
+            # a floating joint allows motion for
+            # all 6 degrees of freedom
+            posebone.lock_location = (False, False, False)
+            posebone.lock_rotation = (False, False, False)
+
+        #elif self.type == self.PLANAR:
+            # allows motion in a plane perpendicular
+            # to the axis
         else:
             logger.warning("[URDF] joint type ({}) configuration not implemented yet".format(self.type))
 
