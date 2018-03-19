@@ -579,6 +579,7 @@ def create_objects_by_link(link, g_type):
         if g_type == 'collision':
             v.name += '_bb'
             v.hide = True
+            v.hide_render = True
 
     # currently we ignore cameras and lamps
     # which could be imported by collada/stl files
