@@ -344,7 +344,12 @@ class URDFJoint:
             logger.warning("[URDF] found material without name: {}".format(self.link.material))
             return
 
-        rgba = None
+        # it is possible, that a collada/stl import
+        # import materials as well. We take the
+        # urdf informations so we have to delete them
+        obj.data.materials.clear(1)
+
+        rgba = [1.0, 1.0, 1.0, 1.0] # default white
         filename = None
 
         # local material
@@ -369,22 +374,22 @@ class URDFJoint:
         if not mat:
             mat = bpymorse.get_materials().new(name=material.name)
 
-        if rgba:
-            obj.data.materials.append(mat)
-            mat.diffuse_color = (rgba[0], rgba[1], rgba[2])
+            if rgba:
+                mat.diffuse_color = (rgba[0], rgba[1], rgba[2])
 
-        if filename:
-            path = filename.replace("package:/", ROS_SHARE_ROOT)
-            path = path.replace("file://", "")
+            if filename:
+                path = filename.replace("package:/", ROS_SHARE_ROOT)
+                path = path.replace("file://", "")
 
-            print("Load Texture: " + path)
-            tex = self.load_texture(path)
-            slot = mat.texture_slots.add()
-            slot.texture = tex
-            slot.texture_coords = 'ORCO'
+                tex = self.load_texture(path)
+
+                slot = mat.texture_slots.add()
+                slot.texture = tex
+                slot.texture_coords = 'ORCO'
+        obj.data.materials.append(mat)
 
     def load_texture(self, img_path):
-        img = bpymorse.get_images().load(img_path)
+        img = bpymorse.get_images().load(img_path, check_existing=True)
 
         tex_name = img_path.split('/')[-1]
         tex = bpymorse.get_textures().new(name=tex_name, type='IMAGE')
