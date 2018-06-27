@@ -2,6 +2,7 @@ import logging; logger = logging.getLogger("morsebuilder." + __name__)
 import math
 from morse.core.mathutils import Vector, Matrix, Euler
 import copy
+import bpy
 
 from morse.builder import bpymorse
 
@@ -32,48 +33,55 @@ class URDFLink:
     def __init__(self, urdf_link):
 
         self.name = urdf_link.name
-
-        self.inertial = urdf_link.inertial
         self.visual = urdf_link.visual
         self.collision = urdf_link.collision
 
+
+        # TODO: implement these
+        self.inertial = urdf_link.inertial
+
         self._get_origin()
 
-        logger.debug("[URDF] create Link {} at {} with {}".format(urdf_link.name, self.xyz, self.rot))
+        logger.debug("[URDF] create Link {}".format(urdf_link.name))
 
     def _get_origin(self):
-        """ Links do not define proper origin. We still try to extract one
-        to correctly place the bones' tails when necessary (like, when a bone
-        is not connected to any other child bone).
-        """
-        xyz = (0,0,0)
-        rpy = (0,0,0)
 
-        #if self.inertial and self.inertial.origin:
-        #    xyz = self.inertial.origin.xyz
-        #    rpy = self.inertial.origin.rpy
-        #elif self.collision and self.collision.origin:
-        #    xyz = self.collision.origin.xyz
-        #    rpy = self.collision.origin.rpy
+        xyz_v = (0,0,0)
+        rpy_v = (0,0,0)
+
+        xyz_c = (0,0,0)
+        rpy_c = (0,0,0)
+
+        xyz_i = (0,0,0)
+        rpy_i = (0,0,0)
+
         if self.visual and self.visual.origin:
-            xyz = self.visual.origin.xyz
-            rpy = self.visual.origin.rpy
+            xyz_v = self.visual.origin.xyz
+            rpy_v = self.visual.origin.rpy
 
-        self.xyz = Vector(xyz)
-        self.rot = Euler(rpy, 'XYZ').to_quaternion()
+        if self.collision and self.collision.origin:
+            xyz_c = self.collision.origin.xyz
+            rpy_c = self.collision.origin.rpy
+
+        self.xyz_v = Vector(xyz_v)
+        self.rot_v = Euler(rpy_v, 'XYZ').to_quaternion()
+
+        self.xyz_c = Vector(xyz_c)
+        self.rot_c = Euler(rpy_c, 'XYZ').to_quaternion()
 
 class URDFJoint:
 
-    # cf urdf_parser_py.urdf.Joint.TYPES
-    FIXED = "fixed"
-    PRISMATIC = "prismatic"
-    REVOLUTE = "revolute"
-    CONTINUOUS = "continuous"
+    UNKNOWN = 'unknown'
+    REVOLUTE = 'revolute'
+    CONTINUOUS = 'continuous'
+    PRISMATIC = 'prismatic'
+    FLOATING = 'floating'
+    PLANAR = 'planar'
+    FIXED = 'fixed'
 
-    TYPES = [FIXED, PRISMATIC, REVOLUTE, CONTINUOUS]
+    TYPES = [UNKNOWN, REVOLUTE, CONTINUOUS, PRISMATIC, FLOATING, PLANAR, FIXED]
 
     def __init__(self, urdf_joint, urdf_link):
-        logger.debug("[URDF] create Joint {}".format(urdf_joint.name))
         
         self.name = urdf_joint.name
         self.type = urdf_joint.type
@@ -84,12 +92,11 @@ class URDFJoint:
         if urdf_joint.origin:
             xyz = urdf_joint.origin.xyz
             if urdf_joint.origin.rpy:
-                # self.rot is the *orientation* of the frame of the joint, in
-                # *world coordinates*
                 rpy = urdf_joint.origin.rpy
 
         self.xyz = Vector(xyz)
         self.rot = Euler(rpy, 'XYZ').to_quaternion()
+        self.rot_real = Euler(rpy, 'XYZ').to_quaternion()
 
         self.link = URDFLink(urdf_link)
 
@@ -109,40 +116,48 @@ class URDFJoint:
         # edit/access this member *only* in PoseMode/ObjectMode
         self.posebone = None
 
+        logger.debug("[URDF] create Joint {}".format(urdf_joint.name))
+
     def add_child(self, urdf_joint, urdf_link):
+
         child = URDFJoint(urdf_joint, urdf_link)
         self.children.append(child)
         return child
 
     def build_editmode(self, armature, parent = None):
-        # Create Blender bones
-        #
-        # URDF joints map to bones, URDF links map to objects.
-        # Procedure:
-        #   - create bone and set it to joint-position
-        #   - give the bone an lenght close to 0 (=> EPSILON)
-        #   - repeat it for each child
 
+        # we create a bone directed to y to fit
+        # the world coordinate system
         self.editbone = armature.data.edit_bones.new(self.name)
+        self.editbone.head = (0,0,0)
+        self.editbone.tail = (0, EPSILON, 0)
 
+        # if there is a parent, we have to set it and
+        # update our rotation, because we have to use
+        # the reference frame of the parent bone
         if parent:
-            self.editbone.parent = parent.editbone
-            self.editbone.head = parent.editbone.head + (parent.rot * self.xyz)
-            self.rot = parent.rot * self.rot
+            p_bone = parent.editbone
+            self.editbone.parent = p_bone
+            self.editbone.use_inherit_rotation = True
+            self.rot_real = parent.rot_real * self.rot
+
+        # apply our new rotation
+        self.editbone.transform(self.rot_real.to_matrix())
+
+        # now we set the bone position related
+        # to parent (or not) and rotation
+        if parent:
+            self.editbone.head = p_bone.head + parent.rot_real * self.xyz
         else:
             self.editbone.head = self.xyz
 
-        #print(self.name, self.editbone.matrix, sep='\n')
+        self.editbone.tail = self.editbone.head + self.rot_real * Vector((0, EPSILON, 0))
 
-        # y-axis of the bone is going toward the bones tails
-        # so we give it the global direction here.
-        self.editbone.tail = self.rot * Vector((0, EPSILON, 0)) + self.editbone.head
-
+        # do this procedure for all child joints (bones)
         for child in self.children:
             child.build_editmode(armature, self)
 
     def build_objectmode(self, armature, parent = None):
-
 
         try:
             self.posebone = armature.pose.bones[self.name]
@@ -158,9 +173,10 @@ class URDFJoint:
             child.build_objectmode(armature, self)
 
     def configure_joint(self, posebone):
-        self.posebone.lock_location = (True, True, True)
-        self.posebone.lock_rotation = (True, True, True)
-        self.posebone.lock_scale = (True, True, True)
+
+        posebone.lock_location = (True, True, True)
+        posebone.lock_rotation = (True, True, True)
+        posebone.lock_scale = (True, True, True)
 
         ax = self.axis[0]
         ay = self.axis[1]
@@ -191,11 +207,11 @@ class URDFJoint:
             # a limited range specified by the upper and lower limits. 
 
             if self.limit:
-                c = self.posebone.constraints.new('LIMIT_ROTATION')
+                c = posebone.constraints.new('LIMIT_ROTATION')
                 c.owner_space = 'LOCAL'
 
             if ax: # x-axis
-                self.posebone.lock_rotation[0] = False
+                posebone.lock_rotation[0] = False
 
                 if self.limit:
                     c.use_limit_x = True
@@ -203,7 +219,7 @@ class URDFJoint:
                     c.max_x = limit_x_upper
 
             if ay: # y-axis
-                self.posebone.lock_rotation[1] = False
+                posebone.lock_rotation[1] = False
 
                 if self.limit:
                     c.use_limit_y = True
@@ -211,7 +227,7 @@ class URDFJoint:
                     c.max_y = limit_y_upper
 
             if az: # z-axis
-                self.posebone.lock_rotation[2] = False
+                posebone.lock_rotation[2] = False
 
                 if self.limit:
                     c.use_limit_z = True
@@ -224,11 +240,11 @@ class URDFJoint:
             # limited range specified by the upper and lower limits
 
             if self.limit:
-                c = self.posebone.constraints.new('LIMIT_LOCATION')
+                c = posebone.constraints.new('LIMIT_LOCATION')
                 c.owner_space = 'LOCAL'
 
             if ax: # x-axis
-                self.posebone.lock_location[0] = False
+                posebone.lock_location[0] = False
 
                 if self.limit:
                     c.use_min_x = True
@@ -237,7 +253,7 @@ class URDFJoint:
                     c.max_x = limit_x_upper
 
             if ay: # y-axis
-                self.posebone.lock_location[1] = False
+                posebone.lock_location[1] = False
 
                 if self.limit:
                     c.use_min_y = True
@@ -246,7 +262,7 @@ class URDFJoint:
                     c.max_y = limit_y_upper
 
             if az: # z-axis
-                self.posebone.lock_location[2] = False
+                posebone.lock_location[2] = False
 
                 if self.limit:
                     c.use_min_z = True
@@ -259,58 +275,53 @@ class URDFJoint:
             # the axis and has no upper and lower limits 
 
             if ax: # x-axis
-                self.posebone.lock_rotation[0] = False
+                posebone.lock_rotation[0] = False
 
             if ay: # y-axis
-                self.posebone.lock_rotation[1] = False
+                posebone.lock_rotation[1] = False
 
             if az: # z-axis
-                self.posebone.lock_rotation[2] = False
+                posebone.lock_rotation[2] = False
 
+        elif self.type == self.FLOATING:
+            # a floating joint allows motion for
+            # all 6 degrees of freedom
+            posebone.lock_location = (False, False, False)
+            posebone.lock_rotation = (False, False, False)
+
+        #elif self.type == self.PLANAR:
+            # allows motion in a plane perpendicular
+            # to the axis
         else:
             logger.warning("[URDF] joint type ({}) configuration not implemented yet".format(self.type))
 
-    def add_link_frame(self, armature, joint = None):
+    def add_link_frame(self, armature):
+        """ Creates the link-visual geometry, adds the material
+            and relate it to the parent bone.
         """
-        :param joint: if the link has no proper bone (case for fixed joints at
-        the end of an armature), we need to specify the joint we want to attach
-        the link to (typically, the parent joint)
 
-        """
         if not self.link.visual:
+            logger.debug("[URDF] no visual found for {}".format(self.link.name))
             return
 
-        if not joint:
-            joint = self
+        visuals = create_objects_by_link(self.link, 'visual')
+        collisions = create_objects_by_link(self.link, 'collision')
 
-        visuals = create_objects_by_link(self.link)
+        objects = visuals + collisions
 
-        for v in visuals:
-            v.location = armature.matrix_world * self.posebone.matrix * self.posebone.location
-            v.rotation_quaternion = v.rotation_quaternion * joint.rot
-
-            self.rescale_object(self.link.visual.geometry, v)
-
-            self.add_material(v)
+        for obj in objects:
+            self.add_material(obj)
 
             # parent the visuals to the armature
-            armature.data.bones[joint.name].use_relative_parent = True
-            v.parent = armature
-            v.parent_bone = joint.name
-            v.parent_type = "BONE"
+            obj.parent = armature
+            obj.parent_bone = self.name
+            obj.parent_type = "BONE"
 
-    def rescale_object(self, geometry, obj):
-        if isinstance(geometry, Box):
-            obj.dimensions = geometry.size
-
-        elif isinstance(geometry, Cylinder):
-            diameter = geometry.radius*2
-            length = geometry.length
-            obj.dimensions = (diameter, diameter, length)
-
-        elif isinstance(geometry, Sphere):
-            diameter = geometry.radius*2
-            obj.dimensions = (diameter, diameter, diameter)
+            # visual has to be attached on bone's head
+            # so we're going negativ on bone's y-axis.
+            # Since every bone got a EPSILON-Length we
+            # have to go -EPSILON
+            obj.location -= Vector((0, EPSILON, 0))
 
     def add_material(self, obj):
         """ Adding material to scene if not exist and let
@@ -319,6 +330,11 @@ class URDFJoint:
             We ignore the alpha value of the material color.
             TODO: Adding Texture
         """
+
+        # cannot add materials to types like CAMERA etc.
+        if obj.type != 'MESH':
+            return
+
         if not self.link.visual or not self.link.visual.material:
             return
 
@@ -328,8 +344,13 @@ class URDFJoint:
             logger.warning("[URDF] found material without name: {}".format(self.link.material))
             return
 
-        rgba = None
-        texture = None
+        # it is possible, that a collada/stl import
+        # import materials as well. We take the
+        # urdf informations so we have to delete them
+        obj.data.materials.clear(1)
+
+        rgba = [1.0, 1.0, 1.0, 1.0] # default white
+        filename = None
 
         # local material
         if material.color or material.texture:
@@ -337,7 +358,7 @@ class URDFJoint:
                 rgba = material.color.rgba
 
             if material.texture:
-                texture = material.texture
+                filename = material.texture.filename
 
         # global material
         else:
@@ -346,22 +367,34 @@ class URDFJoint:
                 return
 
             rgba = MATERIALS[material.name]['color']
-            texture = MATERIALS[material.name]['texture']
+            filename = MATERIALS[material.name]['texture']
 
 
         mat = bpymorse.get_material(material.name)
         if not mat:
             mat = bpymorse.get_materials().new(name=material.name)
 
-        try:
-            obj.data.materials.append(mat)
-            mat.diffuse_color = (rgba[0], rgba[1], rgba[2])
-        except AttributeError:
-            # ==> Camera, Light .. have no material
-            # TODO: Remove this try-except block and implement a
-            # object-type query for catch this error
-            pass
+            if rgba:
+                mat.diffuse_color = (rgba[0], rgba[1], rgba[2])
 
+            if filename:
+                path = filename.replace("package:/", ROS_SHARE_ROOT)
+                path = path.replace("file://", "")
+
+                tex = self.load_texture(path)
+
+                slot = mat.texture_slots.add()
+                slot.texture = tex
+                slot.texture_coords = 'ORCO'
+        obj.data.materials.append(mat)
+
+    def load_texture(self, img_path):
+        img = bpymorse.get_images().load(img_path, check_existing=True)
+
+        tex_name = img_path.split('/')[-1]
+        tex = bpymorse.get_textures().new(name=tex_name, type='IMAGE')
+        tex.image = img
+        return tex
 
     def __repr__(self):
         return "URDF joint<%s>" % self.name
@@ -386,6 +419,7 @@ class URDF:
         self.roots = self._walk_urdf(self.urdf.link_map[self.urdf.get_root()])
 
     def _walk_urdf(self, link, parent_bone = None):
+
         bones = []
         for joint, child_link in self._get_urdf_connections(link):
             if parent_bone:
@@ -398,6 +432,7 @@ class URDF:
         return bones
 
     def _get_urdf_connections(self, link):
+
         joints = [joint for joint in self.urdf.joints if joint.parent == link.name]
         return [(joint, self.urdf.link_map[joint.child]) for joint in joints]
 
@@ -409,6 +444,7 @@ class URDF:
 
         :return: the root object created from the URDF file
         """
+
         if self.urdf is None:
             return None
 
@@ -429,7 +465,7 @@ class URDF:
 
         # creating base-link visual, if exist
         if self.base_link.visual:
-            visuals = create_objects_by_link(self.base_link)
+            visuals = create_objects_by_link(self.base_link, 'visual')
             for v in visuals:
                 v.parent = ob
                 v.parent_type = "OBJECT"
@@ -444,6 +480,7 @@ class URDF:
 def add_material(urdf_material):
     """ Add a urdf_material to the global MATERIALS dictonary.
     """
+
     global MATERIALS
 
     if urdf_material.name in MATERIALS:
@@ -457,37 +494,42 @@ def add_material(urdf_material):
     if urdf_material.texture and urdf_material.texture.filename:
         MATERIALS[urdf_material.name]['texture'] = urdf_material.texture.filename
 
-def create_objects_by_link(link):
+def create_objects_by_link(link, g_type):
     """ Creates a object from a given URDFLink and
         set the correct origin.
 
         :param link: related URDFLink
         :return: list of all created objects
     """
+
     visuals = []
 
-    if link.visual and link.visual.geometry:
-        geometry = link.visual.geometry
+    geometry = None
+    if g_type == 'visual':
+        if link.visual and link.visual.geometry:
+            geometry = link.visual.geometry
+    elif g_type == 'collision':
+        if link.collision and link.collision.geometry:
+            geometry = link.collision.geometry
 
+    if geometry:
         if isinstance(geometry, Mesh):
 
             path = geometry.filename.replace("package:/", ROS_SHARE_ROOT)
             path = path.replace("file://", "")
+
             # Save a list of objects names before importing Collada/STL
             objects_names = [obj.name for obj in bpymorse.get_objects()]
 
             if '.dae' in geometry.filename:
-                # Import Collada from filepath
                 bpymorse.collada_import(filepath=path)
-                # Get a list of the imported objects
-                visuals = [obj for obj in bpymorse.get_objects() \
-                              if obj.name not in objects_names]
 
             elif '.stl' in geometry.filename:
                 bpymorse.stl_import(filepath=path)
-                # Get a list of the imported objects
-                visuals = [obj for obj in bpymorse.get_objects() \
-                              if obj.name not in objects_names]
+
+            # Get a list of the imported objects
+            visuals = [obj for obj in bpymorse.get_objects() \
+                          if obj.name not in objects_names]
 
             if geometry.scale:
                 for v in visuals:
@@ -517,18 +559,39 @@ def create_objects_by_link(link):
             visuals = [ob]
 
     else:
-        bpymorse.add_empty(type = "ARROWS")
+        if g_type == 'visual':
+            bpymorse.add_empty(type = "ARROWS")
 
-        empty = bpymorse.get_first_selected_object()
-        empty.name = link.name
-        empty.scale = [0.01, 0.01, 0.01]
-        visuals = [empty]
+            empty = bpymorse.get_first_selected_object()
+            empty.name = link.name
+            empty.scale = [0.01, 0.01, 0.01]
+            visuals = [empty]
+
+    if g_type == 'visual':
+        xyz = link.xyz_v
+        rot = link.rot_v
+    elif g_type == 'collision':
+        xyz = link.xyz_c
+        rot = link.rot_c
 
     for v in visuals:
         # set link origin and rotation
-        v.location = v.location + link.xyz
+        v.location = xyz
         v.rotation_mode = "QUATERNION"
-        v.rotation_quaternion = v.rotation_quaternion * link.rot
+        v.rotation_quaternion *= rot
         bpymorse.origin_set(type='ORIGIN_CURSOR')
+
+        if g_type == 'collision':
+            v.name += '_bb'
+            v.hide = True
+            v.hide_render = True
+
+    # currently we ignore cameras and lamps
+    # which could be imported by collada/stl files
+    del_visuals = [v for v in visuals if v.type in ('CAMERA', 'LAMP')]
+    visuals = [v for v in visuals if v.type not in ('CAMERA', 'LAMP')]
+
+    if del_visuals:
+        bpymorse.delete(del_visuals)
 
     return visuals

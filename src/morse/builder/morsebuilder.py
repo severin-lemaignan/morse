@@ -121,7 +121,7 @@ class Component(AbstractComponent):
 
     cf. `bpy.ops.wm.link_append` and `bpy.data.libraries.load`
     """
-    def __init__(self, category='', filename='',blender_object_name=None, make_morseable=True):
+    def __init__(self, category='', filename='', blender_object_name=None, make_morseable=True):
         """ Initialize a MORSE component
 
         :param category: The category of the component (folder in
